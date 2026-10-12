@@ -1,0 +1,12 @@
+/target/
+/staging/
+/dist/
+# Local agent configuration is not part of the distributed project.
+/.agents/
+/.codex/
+/.aws/
+.env
+.env.*
+!.env.example
+*.pem
+*.key

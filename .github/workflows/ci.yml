@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to check for release preparation
+        required: false
+        type: string
+        default: ''
+      audit_only:
+        description: Run only the dependency audit
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  AIGATE_REQUIRE_SHELLS: '1'
+
+jobs:
+  checks:
+    name: Linux checks
+    if: ${{ !inputs.audit_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Install native and shell dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Check, test and build
+        run: |
+          make check
+          make build
+          target/release/aigate-cli --version
+          cargo package --list --locked
+
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit the lockfile
+        run: cargo audit --file Cargo.lock

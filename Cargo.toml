@@ -1,0 +1,32 @@
+[package]
+name = "aigate-cli"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+readme = "README.md"
+description = "CLI for AIGate GPU resources and instance lifecycle"
+repository = "https://github.com/davisye/aigate-cli"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+comfy-table = "7"
+keyring = { version = "3.6.3", default-features = false, features = [
+    "apple-native",
+    "windows-native",
+    "sync-secret-service",
+    "crypto-rust",
+] }
+reqwest = { version = "0.12.28", default-features = false, features = [
+    "rustls-tls",
+    "json",
+] }
+rpassword = "7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dev-dependencies]
+wiremock = "0.6"
