@@ -6,7 +6,9 @@
 
 ## 报告安全问题
 
-请通过本仓库 GitHub **Security → Report a vulnerability** 私密报告凭证泄漏、确认绕过、请求重放或其他安全问题。该入口需要仓库维护者启用 Private vulnerability reporting；若入口尚不可用，请先通过普通 Issue 请求启用私密报告渠道，只说明需要安全联系，不公开漏洞细节。仓库地址为 [davisye/aigate-cli](https://github.com/davisye/aigate-cli)，私有阶段仅授权成员可访问。
+仓库地址为 [davisye/aigate-cli](https://github.com/davisye/aigate-cli)，当前为私有仓库，仅授权成员可访问。GitHub Private vulnerability reporting 目前仅支持公开仓库，因此当前没有 **Security → Report a vulnerability** 入口。发现安全问题时，请先通过 Issue 请求私密联系渠道，只说明需要安全联系，待维护者提供渠道后再提交漏洞细节。
+
+公开仓库前，维护者应启用 Private vulnerability reporting，并将本节更新为实际可用的报告入口。启用后，通过 **Security → Report a vulnerability** 私密报告凭证泄漏、确认绕过、请求重放或其他安全问题。功能要求见 [GitHub 文档](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)。
 
 报告可包含受影响版本、操作系统、脱敏后的复现步骤、预期与实际行为。不要上传 Token、密码、Keyring 导出、完整实例连接信息或未脱敏的响应。普通 Issue 用于不含安全细节的问题。
 

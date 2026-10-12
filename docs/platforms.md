@@ -7,14 +7,14 @@
 | 平台 | 状态 | 凭证后端 |
 | --- | --- | --- |
 | Arch Linux x86_64，GNU 环境 | 已验证：Rust 1.97.1、自动测试、安装回归、release 构建及 GNOME Keyring；真实 API 验证边界见 [开发文档](development.md#已知行为与验证边界) | Secret Service |
-| Ubuntu LTS x86_64 | 待验证 | Secret Service |
+| Ubuntu 24.04 x86_64 | CI 已验证：固定工具链、自动测试、安装回归、Bash/Zsh/Fish 补全及 release 构建；桌面凭证库与真实 API 待验证 | Secret Service |
 | macOS Apple Silicon | 后端已配置，原生构建与功能待验证 | Keychain |
 | Windows x64 MSVC | 后端已配置，原生构建与功能待验证 | Credential Manager |
 | Intel Mac、其他架构、musl | 尚未验证，按需求补充 | 以对应目标实际后端为准 |
 
 配置见 [Cargo.toml](../Cargo.toml)，后端映射见 [keyring 文档](https://docs.rs/keyring/3.6.3/keyring/)。当前最低 Rust 版本未验证，因此未声明 `rust-version`。
 
-仓库 CI 配置为 Ubuntu 24.04 x86_64，使用 `rust-toolchain.toml` 固定的工具链；尚待首次远端运行验收。CI 的本地 mock 测试不包含桌面凭证库和真实云资源验收，不能据此将其他平台标记为全部通过。
+仓库 CI 使用 Ubuntu 24.04 x86_64 和 `rust-toolchain.toml` 固定的工具链；2026-10-12 首次远端 [Linux checks](https://github.com/davisye/aigate-cli/actions/runs/38239804112/job/114779334603) 已通过。CI 的本地 mock 测试不包含桌面凭证库和真实云资源验收，不能据此将其他平台标记为全部通过。
 
 ## 构建与终端差异
 

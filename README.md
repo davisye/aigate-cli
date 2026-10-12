@@ -14,7 +14,7 @@ AIGate CLI 面向个人账户，基于云扉 OpenAPI 提供资源查询、实例
 - **自动化输出**：提供 JSON、稳定的退出码和默认脱敏，便于脚本及 Agent 调用。
 - **Shell 集成**：支持 Bash、Zsh、Fish 的离线补全，由用户自行配置加载。
 
-目前已在 **Arch Linux x86_64** 验证。macOS、Windows 已配置原生凭证后端，实机编译与功能仍待验收，详见 [平台支持](docs/platforms.md)。
+目前已在 **Arch Linux x86_64** 验证，并通过 **Ubuntu 24.04 x86_64** 的 CI 构建与自动测试。Ubuntu 桌面凭证、macOS 与 Windows 的实机功能仍待验收，详见 [平台支持](docs/platforms.md)。
 
 ## 快速开始
 

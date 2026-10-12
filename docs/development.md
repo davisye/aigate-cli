@@ -123,16 +123,30 @@ v0.1.0 的发行流程目前只生成源码包，不分发本机编译产物。�
 - `.github/dependabot.yml`：每周检查 Cargo 和 GitHub Actions 更新。
 - Actions 固定完整提交 SHA，默认 `contents: read`，checkout 不保留凭证。只有创建草稿的独立任务获得 `contents: write`，该任务不检出或执行项目代码。CI 不配置真实 `AIGATE_TOKEN`。
 
+2026-10-12 首次远端 [CI](https://github.com/davisye/aigate-cli/actions/runs/38239804112) 已通过：`Linux checks` 完成全部自动测试、安装回归和 release 构建，`Dependency audit` 完成锁文件审计。
+
 ### GitHub 仓库设置
 
 维护者在目标仓库检查以下设置；本地配置文件不能代替网页端设置：
 
 1. 默认分支为 `main`。保护主分支：要求 PR 和成功的 `Linux checks`、`Dependency audit` 检查，禁止强推与删除。先运行 CI，再从实际检查记录中选择；单人维护可不要求其他人的审批。
 2. Actions 默认工作流权限为读取；限制可使用的 Actions，并启用完整 SHA 固定策略。使用 GitHub 托管 runner。
-3. 启用 Dependabot alerts、安全更新、secret scanning、push protection 和 Private vulnerability reporting；凭证扫描不能保证识别云扉自定义 Token。
+3. 启用 Dependabot alerts 和安全更新。按仓库类型与账户方案核对 secret scanning、push protection 和 Private vulnerability reporting 的可用性；凭证扫描不能保证识别云扉自定义 Token。
 4. 启用 immutable releases。公开发布前上传齐全附件；发布后修复产物使用新版本。
 
 设置依据：[分支保护](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)、[Actions 安全](https://docs.github.com/en/actions/reference/security/secure-use)、[仓库安全](https://docs.github.com/en/repositories/creating-and-managing-repositories/best-practices-for-repositories)、[不可变发行版](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)。
+
+2026-10-12 已创建私有仓库 `davisye/aigate-cli`，默认分支为 `main`；实际配置如下。仓库公开或账户方案变化后，应重新核对。
+
+| 设置 | 当前状态 |
+| --- | --- |
+| 合并方式 | 仅 Squash merge，合并后删除分支 |
+| Actions | 默认读取权限，不能审批 PR；仅允许 GitHub 官方 Actions，要求完整提交 SHA |
+| 依赖安全 | Dependabot alerts、安全更新已启用，定期审计工作流已配置 |
+| 不可变发行版 | 已启用；尚未创建发行版 |
+| 主分支保护 | GitHub API 返回 403，要求 GitHub Pro 或公开仓库；当前未启用 |
+| 凭证扫描与推送保护 | 当前个人私有仓库未启用；[GitHub Secret Protection 的适用范围](https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning#how-can-i-access-this-feature)见官方文档 |
+| 私密漏洞报告 | 当前私有仓库不可用，公开前启用；报告方式见 [安全政策](../SECURITY.md) |
 
 ### 准备源码发行
 
