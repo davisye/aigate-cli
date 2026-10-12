@@ -12,7 +12,7 @@ repository = "https://github.com/davisye/aigate-cli"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
-comfy-table = "7"
+comfy-table = "8"
 keyring = { version = "3.6.3", default-features = false, features = [
     "apple-native",
     "windows-native",
