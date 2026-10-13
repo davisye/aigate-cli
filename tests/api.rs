@@ -106,6 +106,125 @@ async fn all_instances_reads_every_page_and_retains_filter() {
 }
 
 #[tokio::test]
+async fn status_overview_reads_all_pages_and_groups_numeric_and_unknown_codes() {
+    let server = MockServer::start().await;
+    let first_page: Vec<Value> = (0..20)
+        .map(|index| {
+            json!({
+                "instanceId": 1096749550260588544_i64 + index,
+                "operationStatus": if index < 10 { json!("2") } else { json!(2) }
+            })
+        })
+        .collect();
+    for (current, records) in [
+        (1, json!(first_page)),
+        (
+            2,
+            json!([
+                {"instanceId": "1096749550260588564", "operationStatus": "22"},
+                {"instanceId": "1096749550260588565", "operationStatus": "999"}
+            ]),
+        ),
+    ] {
+        Mock::given(method("POST"))
+            .and(path("/api/openapi/instance/page"))
+            .and(header("authorization", "Bearer test-token"))
+            .and(body_json(json!({"current": current, "pageSize": 20})))
+            .respond_with(success(json!({"total": 22, "records": records})))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    let overview = client(&server).status_overview().await.unwrap();
+    assert_eq!(overview.total, 22);
+    assert_eq!(overview.records.len(), 22);
+    assert_eq!(
+        overview.records[0]["instanceId"].as_i64(),
+        Some(1096749550260588544)
+    );
+    assert_eq!(overview.records[21]["instanceId"], "1096749550260588565");
+    assert_eq!(overview.records[21]["operationStatus"], "999");
+    assert_eq!(overview.records[21]["label"], "未知状态");
+    assert_eq!(
+        serde_json::to_value(overview.summary).unwrap(),
+        json!([
+            {"status": "2", "label": "运行中", "count": 20},
+            {"status": "22", "label": "实例已关机", "count": 1},
+            {"status": "999", "label": "未知状态", "count": 1}
+        ])
+    );
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn status_overview_rejects_missing_or_invalid_states_and_inconsistent_totals() {
+    let mut cases = vec![json!({"total": 1, "records": [{"instanceId": "123"}]})];
+    for code in [Value::Null, json!(""), json!(true), json!(2.5), json!({})] {
+        cases
+            .push(json!({"total": 1, "records": [{"instanceId": "123", "operationStatus": code}]}));
+    }
+    cases.push(json!({"total": 0, "records": [{"instanceId": "123", "operationStatus": "2"}]}));
+    for data in cases {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/openapi/instance/page"))
+            .respond_with(success(data))
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert!(client(&server).status_overview().await.is_err());
+        assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    }
+}
+
+#[tokio::test]
+async fn status_overview_rejects_invalid_ids_and_duplicate_ids_across_pages() {
+    for id in [
+        Value::Null,
+        json!(0),
+        json!(-1),
+        json!(1.5),
+        json!("not-an-id"),
+        json!("9223372036854775808"),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/openapi/instance/page"))
+            .respond_with(success(
+                json!({"total": 1, "records": [{"instanceId": id, "operationStatus": "2"}]}),
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert!(client(&server)
+            .status_overview()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("instanceId"));
+    }
+    let server = MockServer::start().await;
+    for (current, id) in [(1, json!(123)), (2, json!("00123"))] {
+        Mock::given(method("POST"))
+            .and(path("/api/openapi/instance/page"))
+            .and(body_json(json!({"current": current, "pageSize": 20})))
+            .respond_with(success(
+                json!({"total": 2, "records": [{"instanceId": id, "operationStatus": "2"}]}),
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    assert!(client(&server)
+        .status_overview()
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("重复实例 ID"));
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test]
 async fn all_images_reads_pages_with_the_same_filters() {
     let server = MockServer::start().await;
     for (current, records) in [
@@ -221,6 +340,26 @@ async fn invalid_or_unknown_state_never_sends_power_request() {
         let server = MockServer::start().await;
         status_mock(&server, json!(code)).await;
         assert!(client(&server).stop(123).await.is_err());
+        assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    }
+}
+
+#[tokio::test]
+async fn power_errors_sanitize_status_controls_and_credentials() {
+    for start in [true, false] {
+        let server = MockServer::start().await;
+        status_mock(&server, json!("999\u{1b}[2J\u{7} test-token")).await;
+        let api = client(&server);
+        let error = if start {
+            api.start(123).await
+        } else {
+            api.stop(123).await
+        }
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("未知状态"));
+        assert!(!error.contains("test-token"));
+        assert!(!error.chars().any(char::is_control));
         assert_eq!(server.received_requests().await.unwrap().len(), 1);
     }
 }

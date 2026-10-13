@@ -4,7 +4,7 @@
 
 AIGate CLI 面向个人账户，基于云扉 OpenAPI 提供资源查询、实例创建、开关机与释放，支持系统凭证存储、JSON 输出和 shell 自动补全。
 
-[快速开始](#快速开始) · [安装与构建](#构建与运行) · [命令指南](#命令指南) · [自动补全](#shell-自动补全) · [Agent 使用](#agent-使用) · [文档](#文档与开发) · [TODO](#todo)
+[快速开始](#快速开始) · [安装与构建](#构建与运行) · [命令指南](#命令指南) · [CI 与自动化](#ci-与自动化) · [自动补全](#shell-自动补全) · [Agent 使用](#agent-使用) · [文档](#文档与开发) · [TODO](#todo)
 
 ## 特性
 
@@ -18,7 +18,7 @@ AIGate CLI 面向个人账户，基于云扉 OpenAPI 提供资源查询、实例
 
 ## 快速开始
 
-以下示例适用于 Linux 的 Bash、Zsh 和 Fish。在仓库根目录执行，先准备 [构建依赖](#构建与运行)，并确保安装目录已加入 PATH。
+以下示例面向个人桌面环境的日常使用，适用于 Linux 的 Bash、Zsh 和 Fish。登录后使用系统 Keyring，无需设置环境变量。在仓库根目录执行，先准备 [构建依赖](#构建与运行)，并确保安装目录已加入 PATH。
 
 ### 1. 安装
 
@@ -36,7 +36,7 @@ aigate-cli --version
 在 [云扉控制台](https://waas.aigate.cc) 创建 Access Token，然后在当前用户的桌面终端执行：
 
 ```bash
-env -u AIGATE_TOKEN aigate-cli login
+aigate-cli login
 ```
 
 按提示粘贴 Token 并回车，输入不会回显。Token 保存到系统 Keyring 的 `aigate-cli/default`；如有解锁提示，先解锁密钥环。
@@ -44,12 +44,13 @@ env -u AIGATE_TOKEN aigate-cli login
 ### 3. 查询
 
 ```bash
-env -u AIGATE_TOKEN aigate-cli skus
-env -u AIGATE_TOKEN aigate-cli images --all
-env -u AIGATE_TOKEN aigate-cli list --all --json
+aigate-cli skus
+aigate-cli images --all
+aigate-cli status
+aigate-cli list --all --json
 ```
 
-`env -u AIGATE_TOKEN` 让本次命令使用 Keyring。空镜像或实例列表也可以是有效结果。下一步可 [配置补全](#shell-自动补全)，或查看 [命令指南](#命令指南)。
+后续查询直接复用已保存的登录凭证。空镜像或实例列表也可以是有效结果。下一步可 [配置补全](#shell-自动补全)，或查看 [命令指南](#命令指南)。无人值守任务见 [CI 与自动化](#ci-与自动化)。
 
 ## 构建与运行
 
@@ -98,16 +99,24 @@ Make 支持 `PREFIX`、`BINDIR`、`DESTDIR`，例如 `make install PREFIX=/usr/l
 
 ## 认证
 
+### 日常使用：系统 Keyring
+
+在自己的桌面终端执行一次 `aigate-cli login`，后续直接运行查询和实例管理命令。Token 保存在系统 Keyring，无需设置 `AIGATE_TOKEN`。
+
+`login` 接受纯 Token 或 `Bearer <Token>`，隐藏输入并保存凭证；使用 `status` 或 `list --all` 等只读查询验证认证。再次登录会更新同一项，已有 Keyring 登录可继续复用。`login` 也支持从标准输入读取，默认交互方式更适合个人使用。
+
+运行 `aigate-cli logout` 删除本地 Keyring 项。
+
+### 凭证优先级与排查
+
 凭证按以下顺序解析：
 
 1. 进程环境变量 `AIGATE_TOKEN`。
 2. 系统 Keyring 的 `aigate-cli/default`。
 
-已设置但为空或无效的环境变量会报错，不回退到 Keyring。CI、服务器或无桌面环境可由秘密管理器临时注入 `AIGATE_TOKEN`；不要将 Token 写入代码、shell 配置或全局环境。CLI 没有 `--token` 参数。
+`AIGATE_TOKEN` 是可选的环境变量认证方式，适用于 [CI 与自动化](#ci-与自动化)。它会覆盖 Keyring；已设置但为空或无效时会报错，不回退到 Keyring。CLI 没有 `--token` 参数。
 
-`aigate-cli login` 接受纯 Token 或 `Bearer <Token>`，仅保存凭证；使用 `list --all` 等只读查询验证认证。再次登录会更新同一项。`login` 支持隐藏终端输入或标准输入，已有 Keyring 登录可继续复用。
-
-`aigate-cli logout` 删除本地 Keyring 项。若仍设置环境变量，Bash / Zsh 用 `unset AIGATE_TOKEN` 清除，Fish 用 `set -e AIGATE_TOKEN`；PowerShell 语法见 [平台说明](docs/platforms.md#构建与终端差异)。
+如果曾在日常终端设置该变量，恢复 Keyring 认证时，Bash / Zsh 用 `unset AIGATE_TOKEN` 清除，Fish 用 `set -e AIGATE_TOKEN`；PowerShell 语法见 [平台说明](docs/platforms.md#构建与终端差异)。`logout` 只处理 Keyring，环境变量须在调用侧清除。
 
 ### 凭证与安全边界
 
@@ -115,6 +124,7 @@ Make 支持 `PREFIX`、`BINDIR`、`DESTDIR`，例如 `make install PREFIX=/usr/l
 - Linux 使用 Secret Service；macOS Keychain 和 Windows Credential Manager 后端已配置但未完成实机验收。凭证库不可用时不降级为明文文件，后端对应关系见 [keyring 文档](https://docs.rs/keyring/3.6.3/keyring/)。
 - 原生凭证库不能作为同一用户进程之间的可靠应用隔离，服务名和账户名也不是授权机制。见 [GNOME 安全说明](https://wiki.gnome.org/Projects/GnomeKeyring/SecurityFAQ) 与 [Windows 凭证说明](https://learn.microsoft.com/en-us/windows/win32/secauthn/kinds-of-credentials)。
 - `logout` 不撤销服务端 Token；交互确认、`--yes` 和 Agent 技能属于调用侧约束，不能代替服务端权限、过期与撤销。
+- Token 通过系统 Keyring 保存或由秘密管理器临时注入；不写入源码、shell 配置、工作流明文或全局环境。
 
 ## 命令指南
 
@@ -129,6 +139,7 @@ Make 支持 `PREFIX`、`BINDIR`、`DESTDIR`，例如 `make install PREFIX=/usr/l
 | 指定区域规格 | `aigate-cli skus --area 华东一区` |
 | 全部个人镜像 | `aigate-cli images --all` |
 | 全部计费中实例 | `aigate-cli list --all` |
+| 计费中实例状态总览 | `aigate-cli status` |
 | 运行中实例 | `aigate-cli list --operation-status 2 --all` |
 | 已释放实例 | `aigate-cli list --operation-status 4 --all` |
 | 实例详情 / 状态 | `aigate-cli info INSTANCE_ID` / `aigate-cli status INSTANCE_ID` |
@@ -147,6 +158,20 @@ aigate-cli images --image-type 2 --area 华东一区 --sku GPU_SKU --name ComfyU
 
 详情默认隐藏密码、Token、工具配置和连接 URL 查询串。确需查看连接凭证时，显式使用 `aigate-cli info INSTANCE_ID --show-secrets`。
 
+### 状态总览
+
+```bash
+aigate-cli status
+aigate-cli status --json
+aigate-cli status INSTANCE_ID
+```
+
+不带 ID 时自动读取当前账户计费中实例的全部分页，显示总数、各状态数量，以及实例 ID、名称、状态、区域和 GPU 数量。未知状态保留原始码；没有实例时明确显示空结果。已释放历史记录使用 `list --operation-status 4 --all` 查询。
+
+`status --json` 返回 `{ "total", "summary", "records" }`。`summary` 按状态码汇总，每项包含 `status`、`label`、`count`；`records` 保留列表字段并增加状态说明 `label`，默认脱敏。汇总来自列表中的 `operationStatus`；开关机等操作完成后，使用 `status INSTANCE_ID` 单独核对最终状态。
+
+分页不完整、状态字段无效或 API 失败时返回非零退出码，不输出部分总览。
+
 ### 创建实例
 
 先离线预览请求，无需登录，也不访问 API：
@@ -158,6 +183,10 @@ aigate-cli create --sku GPU_SKU --area 华东一区 --image-id IMAGE_ID --image-
 核对后移除 `--dry-run`，在终端输入 `create` 确认。创建会启动新实例，可能立即计费；脚本执行须在已确认具体参数后显式使用 `--yes`（`-y`）。
 
 `--sku` 与 `--gpu-model` 二选一；区域、镜像 ID 和类型须明确指定。GPU 数量为 1–8，默认 1。`--yes` 与 `--dry-run` 互斥。
+
+>
+> 当前云菲 aigete 没有提供官方系统镜像ID获取API。所以创建实例需要先手动创建容器并保存为个人镜像，或者使用社区镜像进行容器创建。
+>
 
 ### 开关机与释放
 
@@ -182,12 +211,13 @@ aigate-cli release INSTANCE_ID
 
 ```bash
 aigate-cli list --all --json
+aigate-cli status --json
 aigate-cli status INSTANCE_ID --json
 aigate-cli --no-proxy skus
 aigate-cli --timeout 60 info INSTANCE_ID
 ```
 
-`--json` 可放在子命令前后，输出也默认脱敏。分页为 `{ "total", "records" }`，SKU 为数组，详情 / 创建为 API 的 `data`；状态包含 `instanceId`、`status`、`label`，开关机 / 释放包含 `action`、`instanceId`、`accepted`。提示写入 stderr；`login/logout` 输出文字，`init` 始终输出 shell 脚本。
+`--json` 可放在子命令前后，输出也默认脱敏。分页为 `{ "total", "records" }`，状态总览为 `{ "total", "summary", "records" }`，SKU 为数组，详情 / 创建为 API 的 `data`；单实例状态包含 `instanceId`、`status`、`label`，开关机 / 释放包含 `action`、`instanceId`、`accepted`。提示写入 stderr；`login/logout` 输出文字，`init` 始终输出 shell 脚本。
 
 | 选项 | 行为 |
 | --- | --- |
@@ -198,6 +228,57 @@ aigate-cli --timeout 60 info INSTANCE_ID
 所有请求禁止自动重试和重定向。创建、开关机或释放出现超时或响应异常时，先查状态、列表或控制台，避免重复提交。`accepted: true` 只表示请求已接受，不代表生命周期已完成。
 
 退出码：`0` 成功或预览成功；`1` API、网络、凭证或确认失败；`2` 参数错误。
+
+## CI 与自动化
+
+CI runner、服务器或无桌面环境的任务，通过平台的 Secrets 或秘密管理器临时注入 `AIGATE_TOKEN`。CLI 直接读取环境凭证，无需执行 `login`，也无需配置桌面 Keyring。
+
+### GitHub Actions 示例
+
+以下示例适用于维护者手动查询云资源：
+
+1. 在运行任务的仓库中，进入 **Settings → Secrets and variables → Actions**，创建名为 `AIGATE_TOKEN` 的 repository secret，值为云扉 Access Token。
+2. 将以下内容保存为 `.github/workflows/aigate-status.yml`，仓库中须包含本项目源码及 `rust-toolchain.toml`。
+3. 将工作流提交到默认分支后，在 **Actions → AIGate status → Run workflow** 手动运行。
+
+```yaml
+name: AIGate status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  query:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y pkg-config libdbus-1-dev
+      - name: Build
+        run: cargo build --release --locked --bin aigate-cli
+      - name: Query instances
+        env:
+          AIGATE_TOKEN: ${{ secrets.AIGATE_TOKEN }}
+        shell: bash
+        run: |
+          : "${AIGATE_TOKEN:?请配置 AIGATE_TOKEN repository secret}"
+          ./target/release/aigate-cli status --json
+          ./target/release/aigate-cli list --all --json
+```
+
+Token 仅注入查询步骤，示例输出为默认脱敏的 JSON。避免打印环境变量、启用 `set -x` 或在 CI 中使用 `--show-secrets`。Secrets 配置与手动触发方式见 [GitHub Secrets 文档](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)和[工作流运行说明](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)。
+
+其他 CI 平台在相应任务中注入同名环境变量，并在安装 CLI 后直接调用 `aigate-cli status --json` 等命令。自动化创建、释放须先核对 `--dry-run`，获得明确授权后使用 `--yes`；查询任务不需要确认参数。
+
+本仓库的开发 CI 使用本地 HTTP mock 和占位凭证，无需配置真实账户 Token。
 
 ## Shell 自动补全
 

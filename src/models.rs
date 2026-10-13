@@ -29,6 +29,20 @@ pub struct Page {
     pub records: Vec<Value>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct StatusCount {
+    pub status: String,
+    pub label: String,
+    pub count: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StatusOverview {
+    pub total: u64,
+    pub summary: Vec<StatusCount>,
+    pub records: Vec<Value>,
+}
+
 // Keep raw codes visible, including codes added after this CLI was written.
 pub fn status_label(code: &str) -> &str {
     match code {

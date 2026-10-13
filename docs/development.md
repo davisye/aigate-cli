@@ -9,7 +9,7 @@
 | `src/main.rs` | clap 命令树、参数校验、操作预览与确认、输出选择、shell 初始化 |
 | `src/auth.rs` | Token 规范化、环境变量优先级、官方 origin 与 Keyring 绑定 |
 | `src/client.rs` | HTTP、响应校验、分页、开关机前置状态 |
-| `src/models.rs` | 请求与分页类型、状态码含义 |
+| `src/models.rs` | 请求、分页与状态总览类型，状态码含义 |
 | `src/output.rs` | 表格、JSON、递归脱敏 |
 
 ## API 映射
@@ -22,7 +22,8 @@
 | `list` | POST `/instance/page` | `current`, `pageSize`，可选 `operationStatus` |
 | `images` | POST `/image/page` | `current`, `pageSize`, `imageType`；社区镜像增加 `areaName`, `skuName`, `imageName`, `imageVersion` |
 | `info` | GET `/instance/get` | `instanceId` |
-| `status` | GET `/instance/status` | `instanceId` |
+| `status`（无 ID） | POST `/instance/page` | 从 `current: 1`、`pageSize: 20` 读取全部计费中实例；按 `operationStatus` 汇总 |
+| `status INSTANCE_ID` | GET `/instance/status` | `instanceId` |
 | `create` | POST `/instance/start` | `skuName` 或 `gpuModel`, `areaName`, `count`, `imageId`, `imageType` |
 | `start` | GET `/instance/open` | `instanceId`；预查状态 `22` / `26` |
 | `stop` | GET `/instance/close` | `instanceId`；预查状态 `2` |
@@ -35,6 +36,7 @@
 - 所有 HTTP 请求禁止自动重试和重定向。尤其不能按 GET 方法推断开关机、释放可安全重放。写请求结果不明时先核对列表或状态。
 - 成功响应要求数值 `code: 0`；存在 `ok` 时须为 `true`。开关机与释放允许 `data: null`；创建要求有效实例 ID，查询必须验证数据形态。无效响应不能当作空结果或成功。
 - ID 保留 int64 精度，不能转换为浮点数；创建请求的 `imageId` 发送数值。分页严格校验 `total`、`records` 及记录类型；到达 `total` 前出现空页须报错。
+- 状态总览复用列表分页，不逐个请求状态接口。全部页成功后才输出；记录数量必须等于最终 `total`，实例 ID 须为有效且不重复的正 int64，`operationStatus` 须为非空字符串或 int64 数值。数值与对应字符串归入同一组，未知码保留原值。JSON 包含 `total`、`summary`、`records`，记录增加 `label` 并默认脱敏；终端文字输出清理控制字符。
 - 原生凭证仅用于归一化后的官方 origin；自定义 origin 只接受调用者显式提供的环境凭证。URL 校验在读取凭证之前完成，无明文配置回退。
 - 默认递归脱敏敏感字段、工具配置与连接 URL 查询串；日志不得暴露当前 Token。`--show-secrets` 只按显式请求显示详情凭证。安全边界见 [README](../README.md#凭证与安全边界)。
 
@@ -58,8 +60,8 @@ Linux 可用 `make check` 运行格式、clippy、Rust 测试、安装及发行�
 | 测试 | 维护范围 |
 | --- | --- |
 | 单元测试 | Token 规范化、官方 origin 绑定、递归脱敏 |
-| `tests/api.rs` | 本地 wiremock 验证方法、路径、认证、请求体、分页、ID、状态约束、错误与无效响应、超时、重试及重定向 |
-| `tests/cli.rs` | 真实进程的参数、确认拦截、退出码、stdout/stderr、JSON、离线命令、凭证边界 |
+| `tests/api.rs` | 本地 wiremock 验证方法、路径、认证、请求体、分页、ID、状态约束与总览汇总、错误与无效响应、超时、重试及重定向 |
+| `tests/cli.rs` | 真实进程的参数、确认拦截、退出码、stdout/stderr、JSON、状态总览与空账户、离线命令、凭证边界 |
 | `tests/completions.rs` | Unix 上 Bash/Fish 的补全候选，Zsh 的加载与注册 |
 | `tests/makefile.sh` | Linux 安装、卸载、clean、sudo 构建环境、含空格路径和构建失败；使用模拟命令与临时目录 |
 | `tests/release.sh` | 临时 Git 仓库中的标签与版本、主分支归属、脏工作区、发行说明、源码包内容、校验和与重复打包一致性 |
@@ -91,7 +93,7 @@ env AIGATE_REQUIRE_SHELLS=1 cargo test --locked --test completions -- --nocaptur
 
 ### 真实账户只读冒烟
 
-在用户要求真实测试时复用已有登录，按 [README 认证说明](../README.md#认证) 选择凭证来源。运行 `regions`、`skus`、`images --all --json`、`list --all --json`、`list --operation-status 4 --all --json`；核对控制台、多页数量和 `total`，空列表可为有效结果。
+在用户要求真实测试时复用已有登录，按 [README 认证说明](../README.md#认证) 选择凭证来源。运行 `regions`、`skus`、`images --all --json`、`list --all --json`、`status`、`status --json`、`list --operation-status 4 --all --json`；核对控制台、多页数量和 `total`，空列表可为有效结果。总览各状态数量之和应等于记录总数；查询期间实例有变化时重新核对。
 
 有实例时对查询得到的 ID 检查 `info`、`status` 及默认脱敏；没有实例则记录跳过。社区镜像按实际区域、SKU 和非空名称查询。用已查到的参数执行创建与释放的 `--dry-run`，核对离线请求；确认拦截与请求数为零由本地 mock 验证。日常冒烟保留现有 Keyring 登录。
 
@@ -136,17 +138,7 @@ v0.1.0 的发行流程目前只生成源码包，不分发本机编译产物。�
 
 设置依据：[分支保护](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)、[Actions 安全](https://docs.github.com/en/actions/reference/security/secure-use)、[仓库安全](https://docs.github.com/en/repositories/creating-and-managing-repositories/best-practices-for-repositories)、[不可变发行版](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)。
 
-2026-10-12 已创建私有仓库 `davisye/aigate-cli`，默认分支为 `main`；实际配置如下。仓库公开或账户方案变化后，应重新核对。
-
-| 设置 | 当前状态 |
-| --- | --- |
-| 合并方式 | 仅 Squash merge，合并后删除分支 |
-| Actions | 默认读取权限，不能审批 PR；仅允许 GitHub 官方 Actions，要求完整提交 SHA |
-| 依赖安全 | Dependabot alerts、安全更新已启用，定期审计工作流已配置 |
-| 不可变发行版 | 已启用；尚未创建发行版 |
-| 主分支保护 | GitHub API 返回 403，要求 GitHub Pro 或公开仓库；当前未启用 |
-| 凭证扫描与推送保护 | 当前个人私有仓库未启用；[GitHub Secret Protection 的适用范围](https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning#how-can-i-access-this-feature)见官方文档 |
-| 私密漏洞报告 | 当前私有仓库不可用，公开前启用；报告方式见 [安全政策](../SECURITY.md) |
+仓库可见性或账户方案变化后，重新核对这些设置。安全报告入口见 [安全政策](../SECURITY.md)，第三方 Actions 的允许列表及合并规则应与当前工作流一致。
 
 ### 准备源码发行
 

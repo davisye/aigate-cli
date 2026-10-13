@@ -32,12 +32,14 @@ description: 使用 aigate-cli 查询云扉 GPU、镜像和实例，执行已获
 | 全部个人镜像 | `aigate-cli images --all --json` |
 | 社区镜像 | `aigate-cli images --image-type 2 --area AREA --sku GPU_SKU --name IMAGE_NAME --all --json` |
 | 全部计费中实例 | `aigate-cli list --all --json` |
+| 计费中实例状态总览 | `aigate-cli status --json` |
 | 运行中实例 | `aigate-cli list --operation-status 2 --all --json` |
 | 已释放实例 | `aigate-cli list --operation-status 4 --all --json` |
 | 详情 / 状态 | `aigate-cli info INSTANCE_ID --json` / `aigate-cli status INSTANCE_ID --json` |
 
 - `gpus`、`stock` 是 `skus` 的别名；规格可查询不代表此刻有可分配库存。价格和容量按 API 原值报告，不推测单位或扣费。
 - `list`、`images` 默认只查一页（20 条）。`--all` 从第一页读到 `total`，与显式 `--page` 互斥；实例页大小为 1–20，镜像为 5–20。默认实例列表只含计费中实例，空列表可为有效结果。
+- `status` 无 ID 时自动查询全部计费中实例并按状态汇总，无需 `--all`。汇总使用列表的 `operationStatus`；核验某个实例的生命周期终态时使用 `status INSTANCE_ID`。已释放历史记录通过列表筛选 `4` 查询。
 - 实例 ID 字段为 `instanceId`，镜像 ID 为 `worksId`，均按正 int64 保留，不经过浮点数转换或复用历史测试 ID。
 - 支持个人镜像 `3`、社区镜像 `2`，不接受系统镜像 `1`。官方环境需由用户先保存为个人镜像，再查询 ID。社区查询的区域、SKU、非空名称必填，版本可用 `--image-version` 过滤；个人查询不接受这些社区专用过滤项。
 
@@ -67,13 +69,13 @@ aigate-cli release INSTANCE_ID --dry-run --json
 
 ### 状态核验
 
-创建后记录新 `instanceId`；开关机和释放只针对已核对 ID。提交后间隔查询 `status`，设置有限等待时长，不重复提交写操作。运行中为 `2`，已释放为 `4`，初始化为 `9`，关机中为 `11`，开机中为 `13`，已关机为 `22`，关机且已上传为 `26`；其他码保留原值与 `label`，不能当作可开关机状态。
+创建后记录新 `instanceId`；开关机和释放只针对已核对 ID。提交后间隔查询 `status INSTANCE_ID`，设置有限等待时长，不重复提交写操作。运行中为 `2`，已释放为 `4`，初始化为 `9`，关机中为 `11`，开机中为 `13`，已关机为 `22`，关机且已上传为 `26`；其他码保留原值与 `label`，不能当作可开关机状态。
 
 报告实际 ID、请求是否接受、最后观测状态和未核实项。`accepted: true` 不表示生命周期已完成；实际扣费须核对账单。
 
 ## 结果与失败
 
-- 分页 JSON 为 `{ "total", "records" }`，SKU 为数组，详情 / 创建为 API 的 `data`；状态为 `{ "instanceId", "status", "label" }`，开关机 / 释放为 `{ "action", "instanceId", "accepted" }`，不含 API 外层 envelope。
+- 分页 JSON 为 `{ "total", "records" }`；状态总览为 `{ "total", "summary", "records" }`，`summary` 每项含 `status`、`label`、`count`，记录增加 `label` 并脱敏。SKU 为数组，详情 / 创建为 API 的 `data`；单实例状态为 `{ "instanceId", "status", "label" }`，开关机 / 释放为 `{ "action", "instanceId", "accepted" }`，不含 API 外层 envelope。
 - `--json` 可在子命令前后使用；提示与错误写入 stderr。`login/logout` 输出文字，`init` 始终输出 shell 代码。
 - 退出码 `0` 为成功或预览，`1` 为凭证、确认、网络或 API 失败，`2` 为参数错误。保留脱敏错误和退出码，不能把失败当作空列表。
 - CLI 不自动重试或跟随重定向。写请求超时、响应异常或资源不足时先查状态、列表或控制台，结果不明就报告待核实，不循环创建、开机或释放。

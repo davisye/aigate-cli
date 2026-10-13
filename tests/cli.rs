@@ -92,7 +92,7 @@ fn init_requires_a_supported_shell() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn custom_origin_cannot_read_or_modify_official_keyring_credentials() {
     let server = MockServer::start().await;
-    for command in ["list", "login", "logout"] {
+    for command in ["list", "status", "login", "logout"] {
         let output = Command::new(env!("CARGO_BIN_EXE_aigate-cli"))
             .env_remove("AIGATE_TOKEN")
             .args(["--no-proxy", "--base-url", &server.uri(), command])
@@ -384,6 +384,191 @@ async fn info_redacts_credentials_unless_explicitly_requested() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn status_without_id_emits_complete_redacted_json_overview() {
+    let server = MockServer::start().await;
+    for (current, records) in [
+        (
+            1,
+            json!([
+                {"instanceId": 1096749550260588544_i64, "instanceName": "running", "operationStatus": "2", "password": "private-password"},
+                {"instanceId": "1096749550260588545", "operationStatus": 2}
+            ]),
+        ),
+        (
+            2,
+            json!([
+                {"instanceId": "1096749550260588546", "operationStatus": "26", "config": "private-config"},
+                {"instanceId": "1096749550260588547", "operationStatus": "999"}
+            ]),
+        ),
+    ] {
+        Mock::given(method("POST"))
+            .and(path("/api/openapi/instance/page"))
+            .and(header("authorization", "Bearer cli-token"))
+            .and(body_json(json!({"current": current, "pageSize": 20})))
+            .respond_with(success(json!({"total": 4, "records": records})))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    let output = cli(&["--json", "status"], Some(&server.uri()), "cli-token");
+    let value = parsed(&output);
+    assert_eq!(value["total"], 4);
+    assert_eq!(value["records"].as_array().unwrap().len(), 4);
+    assert_eq!(
+        value["records"][0]["instanceId"].as_i64(),
+        Some(1096749550260588544)
+    );
+    assert_eq!(value["records"][0]["password"], "[REDACTED]");
+    assert_eq!(value["records"][2]["config"], "[REDACTED]");
+    assert_eq!(value["records"][3]["label"], "未知状态");
+    assert_eq!(
+        value["summary"],
+        json!([
+            {"status": "2", "label": "运行中", "count": 2},
+            {"status": "26", "label": "实例关机且已上传", "count": 1},
+            {"status": "999", "label": "未知状态", "count": 1}
+        ])
+    );
+    assert!(value.get("code").is_none());
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for secret in ["cli-token", "private-password", "private-config"] {
+        assert!(!stdout.contains(secret));
+    }
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn status_overview_renders_counts_table_and_safe_unknown_states() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/openapi/instance/page"))
+        .and(body_json(json!({"current": 1, "pageSize": 20})))
+        .respond_with(success(json!({"total": 3, "records": [
+            {"instanceId": "123", "instanceName": "smoke\u{7}", "operationStatus": "2", "areaName": "华东一区", "count": 1},
+            {"instanceId": "124", "operationStatus": 22},
+            {"instanceId": "125", "operationStatus": "999\u{1b}[2J", "password": "private-password"}
+        ]})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let output = cli(&["status"], Some(&server.uri()), "cli-token");
+    ok(&output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for text in [
+        "当前计费中实例：3 个",
+        "运行中 (2)：1 个",
+        "实例已关机 (22)：1 个",
+        "未知状态",
+        "smoke",
+        "华东一区",
+        "123",
+        "124",
+        "125",
+        "GPU数",
+    ] {
+        assert!(stdout.contains(text), "missing {text}: {stdout}");
+    }
+    assert!(!stdout.chars().any(|c| c.is_control() && c != '\n'));
+    assert!(!stdout.contains("private-password"));
+    assert!(output.stderr.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn status_overview_handles_empty_accounts_in_text_and_json() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/openapi/instance/page"))
+        .and(body_json(json!({"current": 1, "pageSize": 20})))
+        .respond_with(success(json!({"total": 0, "records": []})))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let output = cli(&["status"], Some(&server.uri()), "cli-token");
+    ok(&output);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("暂无计费中实例"));
+    assert!(output.stderr.is_empty());
+    assert_eq!(
+        parsed(&cli(
+            &["status", "--json"],
+            Some(&server.uri()),
+            "cli-token"
+        )),
+        json!({"total": 0, "summary": [], "records": []})
+    );
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn status_overview_failures_do_not_emit_a_success_or_partial_overview() {
+    for response in [
+        ResponseTemplate::new(503),
+        success(json!({"total": 2, "records": []})),
+        success(json!({"total": 1, "records": [{"instanceId": "123", "operationStatus": null}]})),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/openapi/instance/page"))
+            .respond_with(response)
+            .expect(1)
+            .mount(&server)
+            .await;
+        let output = cli(&["status", "--json"], Some(&server.uri()), "cli-token");
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        assert!(!output.stderr.is_empty());
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("cli-token"));
+        assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn status_overview_rejects_duplicate_pages_without_partial_output() {
+    let server = MockServer::start().await;
+    for current in [1, 2] {
+        Mock::given(method("POST"))
+            .and(path("/api/openapi/instance/page"))
+            .and(body_json(json!({"current": current, "pageSize": 20})))
+            .respond_with(success(
+                json!({"total": 2, "records": [{"instanceId": "123", "operationStatus": "2"}]}),
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    let output = cli(&["status", "--json"], Some(&server.uri()), "cli-token");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("重复实例 ID"));
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn single_instance_status_sanitizes_text_and_preserves_json_codes() {
+    let server = MockServer::start().await;
+    let code = "999\u{1b}[2J\u{7}";
+    Mock::given(method("GET"))
+        .and(path("/api/openapi/instance/status"))
+        .and(query_param("instanceId", "123"))
+        .respond_with(success(json!(code)))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let output = cli(&["status", "123"], Some(&server.uri()), "cli-token");
+    ok(&output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("未知状态"));
+    assert!(!stdout.chars().any(|c| c.is_control() && c != '\n'));
+    let value = parsed(&cli(
+        &["status", "123", "--json"],
+        Some(&server.uri()),
+        "cli-token",
+    ));
+    assert_eq!(value["status"], code);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn status_keeps_unknown_code_visible_in_json() {
     let server = MockServer::start().await;
     Mock::given(path("/api/openapi/instance/status"))
@@ -452,6 +637,8 @@ async fn invalid_arguments_and_empty_environment_token_make_no_api_requests() {
         vec!["release", "-1", "--yes"],
         vec!["status", "9223372036854775808"],
         vec!["status", "not-an-id"],
+        vec!["status", "0"],
+        vec!["status", "123", "456"],
         vec!["release", "123", "--dry-run", "--yes"],
         vec!["--timeout", "0", "list"],
     ];
@@ -479,9 +666,11 @@ async fn invalid_arguments_and_empty_environment_token_make_no_api_requests() {
             Some(2)
         );
     }
-    let empty_token = cli(&["status", "123"], Some(&server.uri()), "");
-    assert_eq!(empty_token.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&empty_token.stderr).contains("Token"));
+    for args in [vec!["status"], vec!["status", "123"]] {
+        let empty_token = cli(&args, Some(&server.uri()), "");
+        assert_eq!(empty_token.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&empty_token.stderr).contains("Token"));
+    }
     assert!(server.received_requests().await.unwrap().is_empty());
 }
 

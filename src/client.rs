@@ -1,5 +1,7 @@
 use crate::auth::Token;
-use crate::models::{parse_positive_id, status_label, CreateRequest, Page};
+use crate::models::{
+    parse_positive_id, status_label, CreateRequest, Page, StatusCount, StatusOverview,
+};
 use anyhow::{anyhow, bail, Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::{Client as Http, RequestBuilder, Url};
@@ -156,6 +158,44 @@ impl Client {
         self.pages("/image/page", body, all).await
     }
 
+    pub async fn status_overview(&self) -> Result<StatusOverview> {
+        let mut page = self.instances(1, 20, None, true).await?;
+        if page.records.len() as u64 != page.total {
+            bail!("API 实例数量与 total 不一致，无法汇总状态；请重新查询");
+        }
+        let mut counts = std::collections::BTreeMap::new();
+        let mut ids = std::collections::HashSet::new();
+        for record in &mut page.records {
+            let id = record["instanceId"]
+                .as_str()
+                .and_then(parse_positive_id)
+                .or_else(|| record["instanceId"].as_i64().filter(|id| *id > 0))
+                .context("API 实例列表包含无效 instanceId，无法汇总状态")?;
+            if !ids.insert(id) {
+                bail!("API 分页返回重复实例 ID，无法汇总状态；请重新查询");
+            }
+            let code = match &record["operationStatus"] {
+                Value::String(code) if !code.is_empty() => code.clone(),
+                Value::Number(code) if code.is_i64() => code.to_string(),
+                _ => bail!("API 实例列表包含无效 operationStatus，无法汇总状态"),
+            };
+            *counts.entry(code.clone()).or_insert(0) += 1;
+            record["label"] = json!(status_label(&code));
+        }
+        Ok(StatusOverview {
+            total: page.total,
+            summary: counts
+                .into_iter()
+                .map(|(status, count)| StatusCount {
+                    label: status_label(&status).to_owned(),
+                    status,
+                    count,
+                })
+                .collect(),
+            records: page.records,
+        })
+    }
+
     async fn pages(&self, path: &str, mut body: Value, all: bool) -> Result<Page> {
         let mut records = Vec::new();
         for _ in 0..1000 {
@@ -238,8 +278,9 @@ impl Client {
         let status = self.status(id).await?;
         if !matches!(status.as_str(), "22" | "26") {
             bail!(
-                "实例 {id} 为 {}({status})，开机仅允许状态 22 或 26",
-                status_label(&status)
+                "实例 {id} 为 {}({})，开机仅允许状态 22 或 26",
+                status_label(&status),
+                self.safe_message(&status)
             );
         }
         self.action("open", id).await
@@ -249,8 +290,9 @@ impl Client {
         let status = self.status(id).await?;
         if status != "2" {
             bail!(
-                "实例 {id} 为 {}({status})，关机仅允许运行中状态 2",
-                status_label(&status)
+                "实例 {id} 为 {}({})，关机仅允许运行中状态 2",
+                status_label(&status),
+                self.safe_message(&status)
             );
         }
         self.action("close", id).await

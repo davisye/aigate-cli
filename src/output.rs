@@ -1,3 +1,4 @@
+use crate::models::StatusOverview;
 use anyhow::Result;
 use comfy_table::Table;
 use serde_json::Value;
@@ -50,6 +51,46 @@ pub fn json(value: &Value) -> Result<()> {
     Ok(())
 }
 
+pub fn status(id: i64, code: &str) {
+    println!(
+        "{id}: {} ({})",
+        crate::models::status_label(code),
+        clean_text(code)
+    );
+}
+
+pub fn status_overview(overview: &StatusOverview) {
+    println!("当前计费中实例：{} 个", overview.total);
+    if overview.records.is_empty() {
+        println!("暂无计费中实例。");
+        return;
+    }
+    println!(
+        "{}",
+        overview
+            .summary
+            .iter()
+            .map(|item| format!(
+                "{} ({})：{} 个",
+                item.label,
+                clean_text(&item.status),
+                item.count
+            ))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    );
+    table(
+        &overview.records,
+        &[
+            ("ID", "instanceId"),
+            ("名称", "instanceName"),
+            ("状态", "operationStatus"),
+            ("区域", "areaName"),
+            ("GPU数", "count"),
+        ],
+    );
+}
+
 pub fn table(rows: &[Value], columns: &[(&str, &str)]) {
     let mut table = Table::new();
     table.set_header(columns.iter().map(|(label, _)| *label));
@@ -69,12 +110,15 @@ pub fn table(rows: &[Value], columns: &[(&str, &str)]) {
 fn cell(value: &Value) -> String {
     match value {
         Value::Null => "-".into(),
-        Value::String(text) => text
-            .chars()
-            .map(|c| if c.is_control() { ' ' } else { c })
-            .collect(),
+        Value::String(text) => clean_text(text),
         other => other.to_string(),
     }
+}
+
+fn clean_text(text: &str) -> String {
+    text.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect()
 }
 
 #[cfg(test)]

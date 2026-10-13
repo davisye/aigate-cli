@@ -2,7 +2,7 @@
 # Exercise installation without compiling or writing outside a temporary fixture.
 set -eu
 
-project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+project_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 test_dir=$(mktemp -d "${TMPDIR:-/tmp}/aigate-cli-make.XXXXXX")
 trap 'rm -rf -- "$test_dir"' 0
 trap 'exit 1' HUP INT TERM

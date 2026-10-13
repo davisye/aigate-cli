@@ -64,10 +64,11 @@ enum Command {
         #[arg(long)]
         show_secrets: bool,
     },
-    /// 查询实例当前状态，保留原始状态码
+    /// 查看计费中实例状态总览；指定 ID 时查询单个实例
     Status {
+        /// 省略时查询全部计费中实例（自动读取全部分页）
         #[arg(value_parser = positive_id)]
-        instance_id: i64,
+        instance_id: Option<i64>,
     },
     /// 创建并启动新实例（可能立即计费；必须确认）
     Create(CreateArgs),
@@ -434,7 +435,9 @@ async fn run(cli: Cli) -> Result<()> {
             instance_id,
             show_secrets,
         } => emit(client(&cli)?.info(*instance_id).await?, *show_secrets),
-        Command::Status { instance_id } => {
+        Command::Status {
+            instance_id: Some(instance_id),
+        } => {
             let code = client(&cli)?.status(*instance_id).await?;
             if cli.json {
                 emit(
@@ -442,7 +445,16 @@ async fn run(cli: Cli) -> Result<()> {
                     false,
                 )
             } else {
-                println!("{instance_id}: {} ({code})", status_label(&code));
+                output::status(*instance_id, &code);
+                Ok(())
+            }
+        }
+        Command::Status { instance_id: None } => {
+            let overview = client(&cli)?.status_overview().await?;
+            if cli.json {
+                emit(serde_json::to_value(overview)?, false)
+            } else {
+                output::status_overview(&overview);
                 Ok(())
             }
         }
