@@ -1,6 +1,6 @@
 ---
 name: aigate-cli
-description: 使用 aigate-cli 查询云扉 GPU、镜像和实例，执行已获授权的创建、开关机与释放，排查认证或命令失败。用户要求使用该 CLI 管理 AIGate 资源时使用。
+description: 使用 aigate-cli 查询云扉 GPU、镜像和实例，执行已获授权的实例管理、Workflow 与 Comfy 任务提交、状态查询和文件上传，排查认证或命令失败。用户要求使用该 CLI 管理 AIGate 资源或生成任务时使用。
 ---
 
 # AIGate CLI
@@ -16,6 +16,7 @@ description: 使用 aigate-cli 查询云扉 GPU、镜像和实例，执行已获
 ## 认证
 
 - 来源为 `AIGATE_TOKEN` → 系统 Keyring 的 `aigate-cli/default`。已设置但为空或无效的环境变量报错，不回退到 Keyring。
+- Workflow 独立使用 `AIGATE_WORKFLOW_TOKEN` → `aigate-cli/workflow`，官方 origin 为 `https://studio.aigate.cc`；登录 / 退出命令为 `workflow login` / `workflow logout`。算力与 Comfy 共用原有登录，凭证不跨服务回退。以下算力凭证排查方式对 Workflow 使用对应变量和命令。
 - Keyring 项仅用于归一化后的官方 origin `https://waas.aigate.cc`。自定义 `--base-url` 需显式临时提供该地址的环境凭证；`login/logout` 只管理官方凭证，不把正式 Token 搬到其他服务绕过限制。
 - 用户指定 Keyring 时，Bash/Zsh/Fish 用 `env -u AIGATE_TOKEN aigate-cli ...` 排除覆盖。PowerShell 可先运行 `Remove-Item Env:AIGATE_TOKEN -ErrorAction SilentlyContinue`；均不读取或打印原值。
 - 认证缺失或凭证库锁定时，让用户在本地终端解锁并用 `aigate-cli login` 隐藏输入。Token 不放入对话、代码、明文配置、命令参数或日志；没有 `--token` 选项，也无明文存储回退。
@@ -72,6 +73,30 @@ aigate-cli release INSTANCE_ID --dry-run --json
 创建后记录新 `instanceId`；开关机和释放只针对已核对 ID。提交后间隔查询 `status INSTANCE_ID`，设置有限等待时长，不重复提交写操作。运行中为 `2`，已释放为 `4`，初始化为 `9`，关机中为 `11`，开机中为 `13`，已关机为 `22`，关机且已上传为 `26`；其他码保留原值与 `label`，不能当作可开关机状态。
 
 报告实际 ID、请求是否接受、最后观测状态和未核实项。`accepted: true` 不表示生命周期已完成；实际扣费须核对账单。
+
+## Workflow 与 Comfy 生成任务
+
+先查看 `aigate-cli workflow --help` 或 `aigate-cli comfy --help`。第一版支持以下命令；`APP_ID`、`INSTANCE_ID`、`TASK_ID` 与文件路径须来自当前用户指定或实际查询，不能复用历史示例：
+
+| 目的 | 命令 |
+| --- | --- |
+| Comfy 应用及参数定义 | `aigate-cli comfy apps --json` |
+| 应用绑定实例 | `aigate-cli comfy instances APP_ID --json` |
+| Workflow 文件上传 | `aigate-cli workflow upload FILE --media-type image\|video\|audio` |
+| Comfy 图片上传 | `aigate-cli comfy upload FILE --app-id APP_ID --instance-id INSTANCE_ID` |
+| Workflow 提交预览 | `aigate-cli workflow run --app-id APP_ID --input params.json --dry-run` |
+| Comfy 提交预览 | `aigate-cli comfy run --app-id APP_ID --instance-id INSTANCE_ID --input inputs.json --dry-run` |
+| 任务状态与文件结果 | `aigate-cli workflow status TASK_ID` / `aigate-cli comfy status TASK_ID` |
+
+Workflow 的 appId 和参数定义从 Studio 对应工作流页面取得，尚无 CLI 列表接口。`params.json` 只含 `inputParams` object；Comfy 的 `inputs.json` 只含应用 `allowInput` object，均不是完整工作流图或带外层 appId 的请求体。按定义保留参数类型，文件限 16 MiB。不要在共享文件中保留 Token 或连接凭证。
+
+提交会消耗积分或实例资源，Workflow 排队任务不能取消。先核对用户授权的应用、实例、输入参数与费用范围，准备 `--dry-run`；明确授权后移除预览、添加 `--yes` 提交一次。授权不完整时只做查询和离线预览，再请求缺失决定。CLI 交互输入 `submit`；非交互未传 `--yes` 不发送请求。不得以提交任务为由自动创建、开机、关机或释放实例。
+
+文件上传本身会向云端发送本地内容，须在用户指定文件和目标的范围内执行，支持 `--dry-run` 离线预览元数据。Workflow 图片限 5 MB、音视频限 20 MB。Comfy 上传先查询并唯一匹配应用、运行中的实例，使用独立无平台认证的客户端发送图片到 `input`；将返回的 `name` 按应用定义填入参数，不自行拼接或猜测实例 host。
+
+提交返回 `taskId`（输出为字符串）；保存后间隔查询同一套 API，不重复提交。任务 ID 不能是 URL 或占位值；数字须为正 int64，其他标识仅含 ASCII 字母、数字、下划线和连字符，须以字母或数字开头。状态查询总是 JSON，保留字段并增加 `label`；退出码 0 只表示查询正常，任务成功须 `status=2`。`0` 排队、`1` 生成、Workflow 的 `6` 上传属于进行中；`2..5` 为终态，未知状态保留原值并待核对。`files` 可为 null 或空数组；Comfy 下载链接与实例绑定，应在关机或释放前保存结果。第一版没有等待、下载或取消命令。
+
+签名 URL 和 `comfyuiHost` 查询串默认脱敏。只有用户确需取出结果链接时，在私密输出中对任务状态或 Workflow 上传使用 `--show-secrets`；不将结果写入报告或 CI 日志。文档未明确的创建、Workflow 查询和上传结构仍待真实 API 验收，边界见 [生成 API 验证边界](../../docs/development.md#生成-api-验证边界)。超时或响应异常先核对任务状态或控制台调用记录；没有任务 ID 时报告结果不明，不能自动重放。
 
 ## 结果与失败
 

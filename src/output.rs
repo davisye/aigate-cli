@@ -20,7 +20,7 @@ pub fn redact(value: &mut Value) {
                     if !value.is_null() {
                         *value = Value::String("[REDACTED]".into());
                     }
-                } else if (key == "host" || key.contains("url") || key.contains("domain"))
+                } else if (key.ends_with("host") || key.contains("url") || key.contains("domain"))
                     && value.is_string()
                 {
                     redact_query(value);
@@ -30,11 +30,15 @@ pub fn redact(value: &mut Value) {
             }
         }
         Value::Array(array) => array.iter_mut().for_each(redact),
-        Value::String(text) if text.starts_with("http://") || text.starts_with("https://") => {
-            redact_query(value)
-        }
+        Value::String(text) if is_http_url(text) => redact_query(value),
         _ => {}
     }
+}
+
+fn is_http_url(text: &str) -> bool {
+    text.split_once("://").is_some_and(|(scheme, _)| {
+        scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")
+    })
 }
 
 fn redact_query(value: &mut Value) {
@@ -142,5 +146,21 @@ mod tests {
         assert_eq!(value["instanceId"], "123");
         assert_eq!(value["instanceName"], "test?name");
         assert!(rendered.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn redacts_query_strings_for_case_insensitive_http_schemes() {
+        let mut value = json!({
+            "inputParams": {"image": "HTTPS://example.invalid/file?signature=input-secret"},
+            "files": ["hTtPs://example.invalid/file?token=result-secret", "HTTP://example.invalid/?key=other-secret"]
+        });
+        redact(&mut value);
+        assert_eq!(
+            value["inputParams"]["image"],
+            "HTTPS://example.invalid/file?[REDACTED]"
+        );
+        for secret in ["input-secret", "result-secret", "other-secret"] {
+            assert!(!value.to_string().contains(secret));
+        }
     }
 }

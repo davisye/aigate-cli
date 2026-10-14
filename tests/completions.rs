@@ -101,6 +101,17 @@ fn bash_loads_init_and_completes_commands_options_and_values() {
         ("aigate-cli images --image-type ''", 3, vec!["2", "3"]),
         ("aigate-cli list --operation-status ''", 3, vec!["2", "4"]),
         ("aigate-cli init ''", 2, vec!["bash", "zsh", "fish"]),
+        (
+            "aigate-cli workflow ''",
+            2,
+            vec!["login", "run", "status", "upload"],
+        ),
+        ("aigate-cli comfy run --instance-", 3, vec!["--instance-id"]),
+        (
+            "aigate-cli workflow upload --media-type ''",
+            4,
+            vec!["image", "video", "audio"],
+        ),
     ] {
         let input = format!(
             r#"{init}
@@ -136,6 +147,15 @@ fn fish_loads_init_and_completes_commands_options_and_values() {
         ("aigate-cli images --image-type ", vec!["2", "3"]),
         ("aigate-cli list --operation-status ", vec!["2", "4"]),
         ("aigate-cli init ", vec!["bash", "zsh", "fish"]),
+        (
+            "aigate-cli workflow ",
+            vec!["login", "run", "status", "upload"],
+        ),
+        ("aigate-cli comfy run --instance-", vec!["--instance-id"]),
+        (
+            "aigate-cli workflow upload --media-type ",
+            vec!["image", "video", "audio"],
+        ),
     ] {
         let input = format!("{init}\ncomplete --do-complete '{line}'\n");
         let output = run_shell("fish", &["--no-config"], &input);

@@ -4,7 +4,7 @@ use crate::models::{
 };
 use anyhow::{anyhow, bail, Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
-use reqwest::{Client as Http, RequestBuilder, Url};
+use reqwest::{Client as Http, Method, RequestBuilder, Url};
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -32,10 +32,21 @@ pub struct Client {
     http: Http,
     base: Url,
     token: Token,
+    prefix: &'static str,
 }
 
 impl Client {
     pub fn new(token: Token, base: &str, timeout: Duration, no_proxy: bool) -> Result<Self> {
+        Self::with_prefix(token, base, timeout, no_proxy, PREFIX)
+    }
+
+    pub(crate) fn with_prefix(
+        token: Token,
+        base: &str,
+        timeout: Duration,
+        no_proxy: bool,
+        prefix: &'static str,
+    ) -> Result<Self> {
         let base = normalize_origin(base)?;
         let mut authorization = HeaderValue::from_str(&format!("Bearer {}", token.expose()))
             .map_err(|_| anyhow!("Token 不能用于 HTTP 认证"))?;
@@ -56,17 +67,30 @@ impl Client {
             http: builder.build().context("无法初始化 HTTP client")?,
             base,
             token,
+            prefix,
         })
     }
 
     fn url(&self, path: &str) -> Url {
         let mut url = self.base.clone();
-        url.set_path(&format!("{PREFIX}{path}"));
+        url.set_path(&format!("{}{path}", self.prefix));
         url
     }
 
     async fn send(&self, request: RequestBuilder, mutation: bool) -> Result<Value> {
         let uncertain = if mutation { UNCERTAIN } else { "" };
+        self.send_with_hint(request, uncertain).await
+    }
+
+    pub(crate) fn request(&self, method: Method, path: &str) -> RequestBuilder {
+        self.http.request(method, self.url(path))
+    }
+
+    pub(crate) async fn send_with_hint(
+        &self,
+        request: RequestBuilder,
+        uncertain: &str,
+    ) -> Result<Value> {
         let response = request.send().await.map_err(|error| {
             let reason = if error.is_timeout() {
                 "请求超时"

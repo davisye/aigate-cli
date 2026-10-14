@@ -9,6 +9,8 @@
 | `src/main.rs` | clap 命令树、参数校验、操作预览与确认、输出选择、shell 初始化 |
 | `src/auth.rs` | Token 规范化、环境变量优先级、官方 origin 与 Keyring 绑定 |
 | `src/client.rs` | HTTP、响应校验、分页、开关机前置状态 |
+| `src/generation.rs` | Workflow / Comfy 请求、任务响应校验、文件预检与流式上传 |
+| `src/task_commands.rs` | 生成 API 的命令组、参数文件、预览、提交确认与输出 |
 | `src/models.rs` | 请求、分页与状态总览类型，状态码含义 |
 | `src/output.rs` | 表格、JSON、递归脱敏 |
 
@@ -28,6 +30,43 @@
 | `start` | GET `/instance/open` | `instanceId`；预查状态 `22` / `26` |
 | `stop` | GET `/instance/close` | `instanceId`；预查状态 `2` |
 | `release` | GET `/instance/release` | `instanceId` |
+
+### 生成 API 映射
+
+依据 [Workflow 官方文档](https://docs.aigate.cc/developer/workflowAPI) 与 [Comfy 官方文档](https://docs.aigate.cc/developer/comfyAPI)。两套客户端共享平台响应校验和禁止重试、重定向的策略。
+
+| CLI | Origin / 前缀 | 方法与末级路径 | 参数 |
+| --- | --- | --- | --- |
+| `workflow run` | Studio `/api/comfyui/open/v1/comfyui_workflow` | POST `/create` | `appId` 字符串，`inputParams` object |
+| `workflow status` | 同上 | GET `/getTask` | query `taskId` |
+| `workflow upload` | 同上 | POST `/uploadFile` | query `media_type`；multipart `file` |
+| `comfy apps` | WAAS `/api/openapi/comfyui` | GET `/comfyuiApp/list` | 无 |
+| `comfy instances` | 同上 | GET `/comfyuiInstance/list` | query `appId` |
+| `comfy run` | 同上 | POST `/comfyuiTask/create` | `appId`、`instanceId` 字符串，`allowInput` object |
+| `comfy status` | 同上 | GET `/comfyuiTask/status` | query `taskId` |
+| `comfy upload` | API 返回的 `comfyuiHost` | POST `/api/upload/image` | multipart `image`、`type=input`；先查询应用绑定实例 |
+
+Studio 为 `https://studio.aigate.cc`，WAAS 为 `https://waas.aigate.cc`。Workflow 使用 `AIGATE_WORKFLOW_TOKEN` → `aigate-cli/workflow`；算力 / Comfy 使用 `AIGATE_TOKEN` → `aigate-cli/default`。环境变量为空或无效时报错，两套凭证不互相回退。`--base-url` 按命令组选择默认 origin，自定义地址仍需显式环境凭证，不能读取另一套官方 Keyring 项。
+
+任务输入文件只含参数 object，最多 16 MiB；CLI 添加外层字段。预览与提交确认均在凭证解析之前完成。交互输入 `submit`，非交互显式使用 `--yes`。预览和确认提示默认脱敏，实际请求保留用户参数。提交只接受有效 `taskId`，保留整数精度并在输出中规范为字符串；响应结构无效时报结果不明，不自动重放。查询核对返回任务 ID，保留原始状态并增加 `label`；退出码表示查询是否成功，不能代替任务执行状态判断。
+
+任务 ID 只接受以字母或数字开头、仅含 ASCII 字母、数字、下划线或连字符的标识；数字 ID 须为正 int64，拒绝 URL 和 `null` 等占位值。有名字段 `data.taskId` 可为安全字符串标识，未指定 schema 的标量 `data` 仅兼容正 int64 ID，不把普通成功消息当作任务 ID。位置参数在解析后校验，错误不回显误传的签名 URL。HTTP(S) URL 脱敏的 scheme 比较不区分大小写。
+
+上传只接受非空普通文件，文件名不得含控制字符。Workflow 按十进制 MB 检查图片 5 MB、音视频 20 MB；Comfy 文档未规定大小上限，客户端不添加该服务限制。multipart 使用流式文件体。Comfy 上传要求唯一匹配的应用和实例、`instanceStatus=2`，不自动开机；单独的 HTTP client 没有平台认证头。上传 host 支持 HTTPS、路径前缀与查询串，HTTP 仅允许本地 loopback 测试，拒绝用户信息和 fragment；诊断不回显 host 或原始网络错误。返回须含有效 `name`、`subfolder`、`type=input`。
+
+默认隐藏 `comfyuiHost` 和结果 URL 的查询串；生成任务状态及 Workflow 上传可显式使用 `--show-secrets` 获取带签名的文件链接，不能写入共享日志。未实现自动轮询、下载、取消或应用创建。
+
+### 生成 API 验证边界
+
+本轮完成本地 mock、CLI 和补全验证，未调用真实生成 API、上传文件、修改登录项或消耗积分。原有算力 API 的实机验收不覆盖新功能。
+
+官方文档存在以下空缺，后续真实验收需核对，不能把 mock 通过当作服务端兼容性确认：
+
+- Workflow `getTask` 未给出查询参数表；当前以返回字段名 `taskId` 作为 query 参数，需实机确认。
+- 两套创建接口未给出完整可用的成功响应；当前兼容 `data.taskId` 与正 int64 标量任务 ID。Comfy 的 `ok:false`、空对象占位例不会被视为成功。
+- Workflow 上传未给出响应结构；当前要求标准成功 envelope，`data` 为非空字符串或 object。其 cURL 示例缺少 `/api/`，实现以“请求地址”中的完整路径为准。
+
+真实验收时先查询 Comfy 应用及绑定实例，再由用户指定应用、参数、文件和费用范围。Workflow 单独登录；提交一次后记录 ID 并查询，结果不明先核对控制台调用记录。不自动创建、开机、关机或释放实例；保留现有登录，新增凭证仅按用户授权管理。
 
 ## 实现约束
 
@@ -62,6 +101,8 @@ Linux 可用 `make check` 运行格式、clippy、Rust 测试、安装及发行�
 | 单元测试 | Token 规范化、官方 origin 绑定、递归脱敏 |
 | `tests/api.rs` | 本地 wiremock 验证方法、路径、认证、请求体、分页、ID、状态约束与总览汇总、错误与无效响应、超时、重试及重定向 |
 | `tests/cli.rs` | 真实进程的参数、确认拦截、退出码、stdout/stderr、JSON、状态总览与空账户、离线命令、凭证边界 |
+| `tests/generation_api.rs` | 两套任务 API 的方法、参数、状态和 ID、无效响应、上传大小与 multipart、实例选择、无认证上传、重试及重定向 |
+| `tests/generation_cli.rs` | 生成命令的离线预览、提交确认、独立凭证、输入校验、退出码、JSON 与签名链接脱敏 |
 | `tests/completions.rs` | Unix 上 Bash/Fish 的补全候选，Zsh 的加载与注册 |
 | `tests/makefile.sh` | Linux 安装、卸载、clean、sudo 构建环境、含空格路径和构建失败；使用模拟命令与临时目录 |
 | `tests/release.sh` | 临时 Git 仓库中的标签与版本、主分支归属、脏工作区、发行说明、源码包内容、校验和与重复打包一致性 |
@@ -88,6 +129,8 @@ env AIGATE_REQUIRE_SHELLS=1 cargo test --locked --test completions -- --nocaptur
 | `aigate-cli images --image-type ` | `2`、`3` |
 | `aigate-cli list --operation-status ` | `2`、`4` |
 | `aigate-cli init ` | `bash`、`zsh`、`fish` |
+| `aigate-cli workflow ` | `login`、`logout`、`run`、`status`、`upload` |
+| `aigate-cli workflow upload --media-type ` | `image`、`video`、`audio` |
 
 自动测试不能替代交互式 Tab、隐藏输入和原生凭证库验收。检查终端中文、管道、CRLF / EOF、JSON 重定向以及含空格和中文的路径；原生凭证测试的隔离方式见 [平台说明](platforms.md#原生环境验收)。
 
