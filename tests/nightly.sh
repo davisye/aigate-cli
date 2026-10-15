@@ -187,8 +187,8 @@ done
     cd "$fixture"
     unset CARGO_TARGET_DIR
     for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
-        for label in nightly 0.1.0-beta.1; do
-            export TEST_BINARY_VERSION=0.1.0-beta.1
+        for label in nightly 0.1.0-beta.1 0.1.0-rc.1; do
+            export TEST_BINARY_VERSION=${label/nightly/0.1.0-beta.1}
             bash "$project/scripts/package-binary.sh" "$target" "$TEST_BINARY_VERSION" "$sha" "$label" > "$scratch/output"
             mkdir -p "extracted/$target/$label"
             tar -xzf "dist/aigate-cli-$label-$target.tar.gz" -C "extracted/$target/$label"
@@ -198,6 +198,13 @@ done
             grep -Fqx "Commit: $sha" "extracted/$target/$label/BUILD-INFO.txt"
             grep -Fqx "Target: $target" "extracted/$target/$label/BUILD-INFO.txt"
         done
+    done
+    for label in 0.1.0-rc 0.1.0-rc.01 0.1.0-alpha.1 01.1.0-rc.1; do
+        export TEST_BINARY_VERSION=$label
+        if bash "$project/scripts/package-binary.sh" x86_64-unknown-linux-gnu "$TEST_BINARY_VERSION" "$sha" "$label" > "$scratch/output" 2>&1; then
+            printf 'Invalid binary archive label accepted: %s\n' "$label" >&2
+            exit 1
+        fi
     done
 )
 printf 'Nightly packaging and publication tests passed\n'

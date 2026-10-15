@@ -65,7 +65,16 @@ fn help_and_regions_are_available_without_credentials() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn init_emits_shell_code_without_credentials_or_api_requests() {
     let server = MockServer::start().await;
-    for shell in ["bash", "zsh", "fish"] {
+    for shell in [
+        "bash",
+        "zsh",
+        "fish",
+        "powershell",
+        "clink",
+        "cmder",
+        "nushell",
+        "nu",
+    ] {
         let output = cli(&["init", shell, "--json"], Some(&server.uri()), "");
         ok(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains("aigate-cli"));
@@ -80,7 +89,7 @@ fn init_requires_a_supported_shell() {
     for args in [
         vec!["init"],
         vec!["init", "sh"],
-        vec!["init", "powershell"],
+        vec!["init", "cmd"],
         vec!["init", "bash", "extra"],
     ] {
         let output = cli(&args, None, "");

@@ -1,10 +1,28 @@
 # 更新记录
 
-尚未发布首个正式版本；beta 与 nightly 均为预发行版。
+尚未发布首个正式版本；beta、RC 与 nightly 均为预发行版。
 
 ## [Unreleased]
 
-暂无。
+## [0.1.0-rc.1] - 2026-10-15
+
+### 功能
+
+- 新增 Workflow API：独立 Keyring 登录、文件上传、任务提交与状态及结果查询。
+- 新增 Comfy API：应用和绑定实例查询、图片上传、任务提交与状态及结果查询；实例上传不携带平台 Token。
+- 生成任务支持离线预览和明确确认，两套 API 的子命令及媒体类型加入 shell 补全；新增 API mock 与命令行测试。
+- 新增 PowerShell 7+、Clink/Cmder 与 Nushell 离线补全，覆盖多级命令、别名、选项和固定值；README 补齐加载方法与生成 API 用法。
+
+### 修复
+
+- 默认脱敏覆盖 `comfyuiHost` 等主机字段中的 URL 查询凭证。
+- 修复大写或混合大小写 HTTP(S) 链接漏脱敏；任务 ID 拒绝 URL 与占位值，标量创建响应仅接受正 int64 ID，参数错误不回显误传的签名链接。
+- 修复 Clink 在补完选项值后无法返回父解析器、继续补全后续参数的问题。
+
+### 发行范围
+
+- 新增 `vX.Y.Z-rc.N` 标签发行，沿用 beta 的四平台原生 CI、二进制/源码包与 SHA256 校验流程，发布为非 Latest 的预发行版。
+- Workflow 与 Comfy API 已通过本地 mock 测试，真实账户任务与上传仍待验收；Clink 的 Windows 交互式 Tab 仍待验收。
 
 ## [0.1.0-beta.1] - 2026-10-15
 

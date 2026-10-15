@@ -2,11 +2,11 @@ name: Release
 
 on:
   push:
-    tags: ['v*-beta.*']
+    tags: ['v*-beta.*', 'v*-rc.*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag, for example v0.1.0 or v0.1.0-beta.1
+        description: Existing release tag, for example v0.1.0, v0.1.0-beta.1 or v0.1.0-rc.1
         required: true
         type: string
 
@@ -26,7 +26,7 @@ jobs:
       sha: ${{ steps.tag.outputs.sha }}
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.tag.outputs.version }}
-      beta: ${{ steps.tag.outputs.beta }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,10 +41,10 @@ jobs:
           bash scripts/prepare-release.sh --check "$RELEASE_TAG"
           printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           printf 'tag=%s\nversion=%s\n' "$RELEASE_TAG" "${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
-          if [[ $RELEASE_TAG == *-beta.* ]]; then
-            printf 'beta=true\n' >> "$GITHUB_OUTPUT"
+          if [[ $RELEASE_TAG == *-beta.* || $RELEASE_TAG == *-rc.* ]]; then
+            printf 'prerelease=true\n' >> "$GITHUB_OUTPUT"
           else
-            printf 'beta=false\n' >> "$GITHUB_OUTPUT"
+            printf 'prerelease=false\n' >> "$GITHUB_OUTPUT"
           fi
 
   checks:
@@ -76,7 +76,7 @@ jobs:
 
   draft:
     needs: [validate, package]
-    if: needs.validate.outputs.beta != 'true'
+    if: needs.validate.outputs.prerelease != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -102,16 +102,16 @@ jobs:
 
   binaries:
     needs: [validate, checks]
-    if: needs.validate.outputs.beta == 'true'
+    if: needs.validate.outputs.prerelease == 'true'
     uses: ./.github/workflows/build-binaries.yml
     with:
       ref: ${{ needs.validate.outputs.sha }}
       version: ${{ needs.validate.outputs.version }}
       archive_label: ${{ needs.validate.outputs.version }}
 
-  beta:
+  prerelease:
     needs: [validate, package, binaries]
-    if: needs.validate.outputs.beta == 'true'
+    if: needs.validate.outputs.prerelease == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -126,7 +126,7 @@ jobs:
           pattern: ${{ needs.validate.outputs.version }}-*
           merge-multiple: true
           path: dist/
-      - name: Verify and publish the tagged beta
+      - name: Verify and publish the tagged prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

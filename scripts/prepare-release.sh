@@ -8,9 +8,9 @@ if [[ ${1:-} == --check ]]; then
     check_only=true
     shift
 fi
-[[ $# == 1 ]] || die 'usage: bash scripts/prepare-release.sh [--check] vX.Y.Z[-beta.N]'
+[[ $# == 1 ]] || die 'usage: bash scripts/prepare-release.sh [--check] vX.Y.Z[-beta.N|-rc.N]'
 tag=$1
-[[ $tag =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-beta\.(0|[1-9][0-9]*))?$ ]] || die 'expected vX.Y.Z or vX.Y.Z-beta.N'
+[[ $tag =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(beta|rc)\.(0|[1-9][0-9]*))?$ ]] || die 'expected vX.Y.Z, vX.Y.Z-beta.N or vX.Y.Z-rc.N'
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 [[ $(git rev-parse --show-toplevel) == "$(pwd -P)" ]] || die 'run from the project Git repository'
@@ -55,8 +55,8 @@ done
 {
     printf '# AIGate CLI %s\n\n' "$tag"
     printf '%s\n\n' "$notes"
-    if [[ $version == *-beta.* ]]; then
-        printf 'Beta 预发行版：提供 Linux x86_64 / aarch64、Windows x64、macOS Apple Silicon 二进制与源码包。\n'
+    if [[ $version == *-beta.* || $version == *-rc.* ]]; then
+        printf '预发行版：提供 Linux x86_64 / aarch64、Windows x64、macOS Apple Silicon 二进制与源码包。\n'
         printf 'Linux 基线为 Ubuntu 24.04 / glibc 2.39，需要 D-Bus 运行时库；macOS 基线为 15。二进制未签名或公证，桌面凭证库及真实 API 仍需实机验收。\n'
     else
         printf '本次提供源码包，安装步骤见 README。尚未提供预编译二进制；平台验收状态见 docs/platforms.md。\n'

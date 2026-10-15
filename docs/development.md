@@ -6,9 +6,12 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main.rs` | clap 命令树、参数校验、操作预览与确认、输出选择、shell 初始化 |
+| `src/main.rs` | clap 命令树、参数校验、操作预览与确认、输出选择 |
+| `src/completions.rs`、`src/completions/powershell.ps1` | 从命令树生成 shell 初始化脚本及离线候选 |
 | `src/auth.rs` | Token 规范化、环境变量优先级、官方 origin 与 Keyring 绑定 |
 | `src/client.rs` | HTTP、响应校验、分页、开关机前置状态 |
+| `src/generation.rs` | Workflow / Comfy 请求、任务响应校验、文件预检与流式上传 |
+| `src/task_commands.rs` | 生成 API 的命令组、参数文件、预览、提交确认与输出 |
 | `src/models.rs` | 请求、分页与状态总览类型，状态码含义 |
 | `src/output.rs` | 表格、JSON、递归脱敏 |
 
@@ -29,6 +32,43 @@
 | `stop` | GET `/instance/close` | `instanceId`；预查状态 `2` |
 | `release` | GET `/instance/release` | `instanceId` |
 
+### 生成 API 映射
+
+依据 [Workflow 官方文档](https://docs.aigate.cc/developer/workflowAPI) 与 [Comfy 官方文档](https://docs.aigate.cc/developer/comfyAPI)。两套客户端共享平台响应校验和禁止重试、重定向的策略。
+
+| CLI | Origin / 前缀 | 方法与末级路径 | 参数 |
+| --- | --- | --- | --- |
+| `workflow run` | Studio `/api/comfyui/open/v1/comfyui_workflow` | POST `/create` | `appId` 字符串，`inputParams` object |
+| `workflow status` | 同上 | GET `/getTask` | query `taskId` |
+| `workflow upload` | 同上 | POST `/uploadFile` | query `media_type`；multipart `file` |
+| `comfy apps` | WAAS `/api/openapi/comfyui` | GET `/comfyuiApp/list` | 无 |
+| `comfy instances` | 同上 | GET `/comfyuiInstance/list` | query `appId` |
+| `comfy run` | 同上 | POST `/comfyuiTask/create` | `appId`、`instanceId` 字符串，`allowInput` object |
+| `comfy status` | 同上 | GET `/comfyuiTask/status` | query `taskId` |
+| `comfy upload` | API 返回的 `comfyuiHost` | POST `/api/upload/image` | multipart `image`、`type=input`；先查询应用绑定实例 |
+
+Studio 为 `https://studio.aigate.cc`，WAAS 为 `https://waas.aigate.cc`。Workflow 使用 `AIGATE_WORKFLOW_TOKEN` → `aigate-cli/workflow`；算力 / Comfy 使用 `AIGATE_TOKEN` → `aigate-cli/default`。环境变量为空或无效时报错，两套凭证不互相回退。`--base-url` 按命令组选择默认 origin，自定义地址仍需显式环境凭证，不能读取另一套官方 Keyring 项。
+
+任务输入文件只含参数 object，最多 16 MiB；CLI 添加外层字段。预览与提交确认均在凭证解析之前完成。交互输入 `submit`，非交互显式使用 `--yes`。预览和确认提示默认脱敏，实际请求保留用户参数。提交只接受有效 `taskId`，保留整数精度并在输出中规范为字符串；响应结构无效时报结果不明，不自动重放。查询核对返回任务 ID，保留原始状态并增加 `label`；退出码表示查询是否成功，不能代替任务执行状态判断。
+
+任务 ID 只接受以字母或数字开头、仅含 ASCII 字母、数字、下划线或连字符的标识；数字 ID 须为正 int64，拒绝 URL 和 `null` 等占位值。有名字段 `data.taskId` 可为安全字符串标识，未指定 schema 的标量 `data` 仅兼容正 int64 ID，不把普通成功消息当作任务 ID。位置参数在解析后校验，错误不回显误传的签名 URL。HTTP(S) URL 脱敏的 scheme 比较不区分大小写。
+
+上传只接受非空普通文件，文件名不得含控制字符。Workflow 按十进制 MB 检查图片 5 MB、音视频 20 MB；Comfy 文档未规定大小上限，客户端不添加该服务限制。multipart 使用流式文件体。Comfy 上传要求唯一匹配的应用和实例、`instanceStatus=2`，不自动开机；单独的 HTTP client 没有平台认证头。上传 host 支持 HTTPS、路径前缀与查询串，HTTP 仅允许本地 loopback 测试，拒绝用户信息和 fragment；诊断不回显 host 或原始网络错误。返回须含有效 `name`、`subfolder`、`type=input`。
+
+默认隐藏 `comfyuiHost` 和结果 URL 的查询串；生成任务状态及 Workflow 上传可显式使用 `--show-secrets` 获取带签名的文件链接，不能写入共享日志。未实现自动轮询、下载、取消或应用创建。
+
+### 生成 API 验证边界
+
+本轮完成本地 mock、CLI 和补全验证，未调用真实生成 API、上传文件、修改登录项或消耗积分。原有算力 API 的实机验收不覆盖新功能。
+
+官方文档存在以下空缺，后续真实验收需核对，不能把 mock 通过当作服务端兼容性确认：
+
+- Workflow `getTask` 未给出查询参数表；当前以返回字段名 `taskId` 作为 query 参数，需实机确认。
+- 两套创建接口未给出完整可用的成功响应；当前兼容 `data.taskId` 与正 int64 标量任务 ID。Comfy 的 `ok:false`、空对象占位例不会被视为成功。
+- Workflow 上传未给出响应结构；当前要求标准成功 envelope，`data` 为非空字符串或 object。其 cURL 示例缺少 `/api/`，实现以“请求地址”中的完整路径为准。
+
+真实验收时先查询 Comfy 应用及绑定实例，再由用户指定应用、参数、文件和费用范围。Workflow 单独登录；提交一次后记录 ID 并查询，结果不明先核对控制台调用记录。不自动创建、开机、关机或释放实例；保留现有登录，新增凭证仅按用户授权管理。
+
 ## 实现约束
 
 - 创建、释放先处理离线预览或明确确认，再解析凭证、发送请求。未确认、取消或 EOF 时不得发出 HTTP 请求；`--yes` 与 `--dry-run` 互斥。
@@ -46,6 +86,8 @@
 
 锁定的 `clap_complete` 版本对带连字符的 Bash 程序名生成不一致的子命令路径，因此内部用 `aigate_cli` 生成，再改回注册名。Fish 生成器缺少位置参数候选，额外规则从 `CompletionShell` 枚举生成。升级依赖时检查这些兼容处理能否移除，并运行 shell 执行检查。
 
+PowerShell 使用静态命令树和原生 `Register-ArgumentCompleter`，识别全局选项、别名、引号、位置参数和 `--flag=value`；文件参数交给原生文件补全。Clink 输出 Lua `argmatcher`，链接子命令、选项取值和文件参数，Cmder 共用该脚本。Nushell 使用 `clap_complete_nushell` 生成 `extern` 声明，并补上生成器未输出的可见命令别名。三者均不在 Tab 时调用 CLI 或访问 API。
+
 ## 自动测试
 
 ```text
@@ -57,24 +99,32 @@ cargo build --release --locked --bin aigate-cli
 
 Cargo 是三平台的主要构建入口，无需 Make。Linux 可用 `make check` 运行格式、clippy、Rust 测试、安装及发行脚本回归，`make build` 验证 release 构建。发行脚本回归另外需要 Git、jq、Bash 与 GNU tar / gzip / coreutils，在临时仓库中测试，不修改项目的 Git 历史。`bash tests/nightly.sh` 通过 mock GitHub CLI 验证首次发布、滚动更新、校验失败与恢复草稿，不调用真实 GitHub API。工具链由 `rust-toolchain.toml` 固定；更新工具链时重新运行全部检查。依赖和构建目录遵循 Cargo 默认值；需要隔离缓存时由执行环境覆盖 `CARGO_HOME`、`CARGO_TARGET_DIR`。
 
-CI 在 Ubuntu 24.04 x86_64 / ARM64、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；Windows 不运行 Unix shell 补全测试，macOS 安装 Fish 后运行 Bash / Zsh / Fish 检查。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。原生 CI 不代替桌面凭证库和真实 API 验收。
+CI 在 Ubuntu 24.04 x86_64 / ARM64、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；shell 运行时要求见下文。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。原生 CI 不代替桌面凭证库和真实 API 验收。
 
 | 测试 | 维护范围 |
 | --- | --- |
 | 单元测试 | Token 规范化、官方 origin 绑定、递归脱敏 |
 | `tests/api.rs` | 本地 wiremock 验证方法、路径、认证、请求体、分页、ID、状态约束与总览汇总、错误与无效响应、超时、重试及重定向 |
 | `tests/cli.rs` | 真实进程的参数、确认拦截、退出码、stdout/stderr、JSON、状态总览与空账户、离线命令、凭证边界 |
-| `tests/completions.rs` | Unix 上 Bash/Fish 的补全候选，Zsh 的加载与注册 |
+| `tests/generation_api.rs` | 两套任务 API 的方法、参数、状态和 ID、无效响应、上传大小与 multipart、实例选择、无认证上传、重试及重定向 |
+| `tests/generation_cli.rs` | 生成命令的离线预览、提交确认、独立凭证、输入校验、退出码、JSON 与签名链接脱敏 |
+| `tests/completions.rs` | Bash/Fish 和 PowerShell/Nushell 的补全候选、Zsh 的加载与注册、Lua harness 中的 Clink 注册与参数链接 |
 | `tests/makefile.sh` | Linux 安装、卸载、clean、sudo 构建环境、含空格路径和构建失败；使用模拟命令与临时目录 |
 | `tests/release.sh` | 临时 Git 仓库中的标签与版本、主分支归属、脏工作区、发行说明、源码包内容、校验和与重复打包一致性 |
 
-CI 仅使用本地 mock 和占位凭证。要求完整补全检查的 Unix 环境须准备 Bash、Zsh、Fish，并运行：
+CI 仅使用本地 mock 和占位凭证。要求原有三种 shell 补全检查的 Unix 环境须准备 Bash、Zsh、Fish，并运行：
 
 ```sh
 env AIGATE_REQUIRE_SHELLS=1 cargo test --locked --test completions -- --nocapture
 ```
 
-普通模式缺少 shell 时会跳过，`--nocapture` 显示原因；严格模式下 shell 缺失或版本命令失败均导致测试失败。非 Unix 平台不编译 shell 执行测试。记录实际执行和跳过项，不能只凭测试命令退出成功报告补全验收通过。
+普通模式缺少 shell 时会跳过，`--nocapture` 显示原因；严格模式下 shell 缺失或版本命令失败均导致测试失败。Bash/Zsh/Fish 执行测试仅在 Unix 编译；PowerShell、Nushell 与 Lua 检查跨平台编译，可分别通过 `AIGATE_REQUIRE_POWERSHELL=1`、`AIGATE_REQUIRE_NUSHELL=1`、`AIGATE_REQUIRE_LUA=1` 要求运行时存在。全部运行时已安装时，可运行：
+
+```sh
+env AIGATE_REQUIRE_SHELLS=1 AIGATE_REQUIRE_POWERSHELL=1 AIGATE_REQUIRE_NUSHELL=1 AIGATE_REQUIRE_LUA=1 cargo test --locked --test completions -- --nocapture
+```
+
+CI 配置要求 Windows 执行 PowerShell 检查、macOS 执行 Nushell 与 Lua 检查、Linux 执行 Lua 检查；新配置的远端结果须另行核对。Lua harness 不代替原生 Clink/Cmder 的交互式 Tab 验收。记录实际执行和跳过项，不能只凭测试命令退出成功报告补全验收通过。
 
 ## 手动验收
 
@@ -89,7 +139,9 @@ env AIGATE_REQUIRE_SHELLS=1 cargo test --locked --test completions -- --nocaptur
 | `aigate-cli create --area 华` | `华东一区`、`华东二区` |
 | `aigate-cli images --image-type ` | `2`、`3` |
 | `aigate-cli list --operation-status ` | `2`、`4` |
-| `aigate-cli init ` | `bash`、`zsh`、`fish` |
+| `aigate-cli init ` | `bash`、`zsh`、`fish`、`powershell`、`clink`、`nushell` |
+| `aigate-cli workflow ` | `login`、`logout`、`run`、`status`、`upload` |
+| `aigate-cli workflow upload --media-type ` | `image`、`video`、`audio` |
 
 自动测试不能替代交互式 Tab、隐藏输入和原生凭证库验收。检查终端中文、管道、CRLF / EOF、JSON 重定向以及含空格和中文的路径；原生凭证测试的隔离方式见 [平台说明](platforms.md#原生环境验收)。
 
@@ -118,7 +170,7 @@ env AIGATE_REQUIRE_SHELLS=1 cargo test --locked --test completions -- --nocaptur
 
 ## 发布前核对
 
-Beta 与 nightly 分发四目标 CI 二进制及源码包，正式稳定版保留源码草稿流程。二进制按目标平台完成原生编译、测试、打包和离线运行检查，并附带许可与校验和；桌面凭证库和真实 API 仍需独立验收，要求见 [第三方说明](../THIRD_PARTY_NOTICES.md)。`publish = false` 仅控制 crates.io 发布；Cargo 仓库元数据应填写真实地址。
+Beta、RC 与 nightly 分发四目标 CI 二进制及源码包，正式稳定版保留源码草稿流程。二进制按目标平台完成原生编译、测试、打包和离线运行检查，并附带许可与校验和；桌面凭证库和真实 API 仍需独立验收，要求见 [第三方说明](../THIRD_PARTY_NOTICES.md)。`publish = false` 仅控制 crates.io 发布；Cargo 仓库元数据应填写真实地址。
 
 ### 自动检查
 
@@ -159,14 +211,14 @@ bash scripts/prepare-release.sh v0.1.0
 
 输出写入被忽略的 `dist/`，包含 `aigate-cli-0.1.0-source.tar.gz`、`SHA256SUMS`、`RELEASE_NOTES.md`。脚本不创建提交或标签，不覆盖已有产物。源码包来自 `git archive`，相同提交重复生成的压缩包一致；这不代表跨平台编译出的二进制逐字节一致。
 
-### Beta 标签发行
+### Beta / RC 标签发行
 
-1. 将 Cargo 包与锁文件版本更新为 `X.Y.Z-beta.N`，在 CHANGELOG 中归档同名版本说明。先通过四目标原生 CI 和依赖审计，再合入 `main`。
-2. 为通过检查的 main 提交创建并推送带版本号的标签，例如 `v0.1.0-beta.1`。标签和 Cargo 版本必须完全一致；版本号不允许前导零，只接受 `beta.N`，不接受任意后缀。
+1. 将 Cargo 包与锁文件版本更新为 `X.Y.Z-beta.N` 或 `X.Y.Z-rc.N`，在 CHANGELOG 中归档同名版本说明。先通过四目标原生 CI 和依赖审计，再合入 `main`。
+2. 为通过检查的 main 提交创建并推送带版本号的标签，例如 `v0.1.0-rc.1`。标签和 Cargo 版本必须完全一致；版本号不允许前导零，只接受 `beta.N`、`rc.N`，不接受任意后缀。
 3. 标签推送自动触发 **Release**；也可从 main 手动输入已有标签。流程检查主分支归属、版本和发行说明，重新执行 CI，再调用 `build-binaries.yml` 在四个原生 runner 构建并检查解压后的二进制。
-4. 发布 job 合并四个二进制包和源码包，生成五项 SHA256 校验和，先创建草稿并重新下载校验，完整通过后公开为 prerelease，显式设置 `latest=false`。已存在的同名 Release 不覆盖；后续修复使用新 beta 编号。
+4. 发布 job 合并四个二进制包和源码包，生成五项 SHA256 校验和，先创建草稿并重新下载校验，完整通过后公开为 prerelease，显式设置 `latest=false`。已存在的同名 Release 不覆盖；后续修复使用新 beta 或 RC 编号。
 
-Beta 附件名形如 `aigate-cli-0.1.0-beta.1-aarch64-unknown-linux-gnu.tar.gz`。包内 `BUILD-INFO.txt` 包含版本、完整提交和目标；CLI 输出 `aigate-cli 0.1.0-beta.1`。Beta 与 nightly 的原生打包配置共享，后者使用固定 `nightly` 附件名。
+RC 附件名形如 `aigate-cli-0.1.0-rc.1-aarch64-unknown-linux-gnu.tar.gz`。包内 `BUILD-INFO.txt` 包含版本、完整提交和目标；CLI 输出 `aigate-cli 0.1.0-rc.1`。Beta、RC 与 nightly 的原生打包配置共享，后者使用固定 `nightly` 附件名。
 
 ### Nightly 自动发行
 

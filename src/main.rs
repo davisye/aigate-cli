@@ -1,12 +1,15 @@
 use aigate_cli::auth;
-use aigate_cli::client::{normalize_origin, Client, DEFAULT_BASE};
+use aigate_cli::client::{normalize_origin, Client};
 use aigate_cli::models::{parse_positive_id, status_label, CreateRequest, AREAS};
 use aigate_cli::output;
 use anyhow::{bail, Context, Result};
-use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{json, Value};
 use std::io::{self, IsTerminal, Write};
 use std::time::Duration;
+mod completions;
+mod task_commands;
+use completions::CompletionShell;
 
 const BUILD_VERSION: &str = match option_env!("AIGATE_BUILD_VERSION") {
     Some(version) => version,
@@ -14,14 +17,14 @@ const BUILD_VERSION: &str = match option_env!("AIGATE_BUILD_VERSION") {
 };
 
 #[derive(Parser)]
-#[command(version = BUILD_VERSION, about = "云扉 AIGate 资源与实例管理工具")]
+#[command(version = BUILD_VERSION, about = "云扉 AIGate 资源、实例与生成任务管理工具")]
 struct Cli {
     /// 输出 JSON（仅 data，不含 API envelope；提示写入 stderr）
     #[arg(long, global = true)]
     json: bool,
     /// API origin；默认连接云扉官方服务
-    #[arg(long, global = true, default_value = DEFAULT_BASE)]
-    base_url: String,
+    #[arg(long, global = true)]
+    base_url: Option<String>,
     /// 单次 HTTP 请求超时秒数
     #[arg(long, global = true, default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..=300))]
     timeout: u64,
@@ -34,6 +37,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Workflow API：独立登录、上传文件、提交及查询生成任务
+    Workflow(task_commands::WorkflowArgs),
+    /// Comfy API：查询应用和实例、上传图片、提交及查询生成任务
+    Comfy(task_commands::ComfyArgs),
     /// 隐藏输入 Token 并保存到系统 Keyring
     Login,
     /// 删除系统 Keyring 中的 Token
@@ -101,64 +108,8 @@ enum Command {
     },
 }
 
-#[derive(Clone, Copy, ValueEnum)]
-enum CompletionShell {
-    Bash,
-    Zsh,
-    Fish,
-}
-
 fn init_shell(shell: CompletionShell) -> Result<()> {
-    let generator = match shell {
-        CompletionShell::Bash => clap_complete::Shell::Bash,
-        CompletionShell::Zsh => clap_complete::Shell::Zsh,
-        CompletionShell::Fish => clap_complete::Shell::Fish,
-    };
-    // Add suggestions to the completion schema only; runtime area/status
-    // validation remains forward-compatible with new values from the API.
-    let mut command = Cli::command()
-        .mut_subcommand("skus", |cmd| {
-            cmd.mut_arg("area", |arg| arg.value_parser(AREAS))
-        })
-        .mut_subcommand("images", |cmd| {
-            cmd.mut_arg("area", |arg| arg.value_parser(AREAS))
-        })
-        .mut_subcommand("create", |cmd| {
-            cmd.mut_arg("area", |arg| arg.value_parser(AREAS))
-        })
-        .mut_subcommand("list", |cmd| {
-            cmd.mut_arg("operation_status", |arg| arg.value_parser(["2", "4"]))
-        });
-    let mut script = Vec::new();
-    // clap_complete 4.6.11 builds inconsistent Bash subcommand paths for
-    // hyphenated binary names. Use an underscore internally and rename only
-    // the command registered with `complete` in the generated script below.
-    let bin_name = if matches!(shell, CompletionShell::Bash) {
-        "aigate_cli"
-    } else {
-        "aigate-cli"
-    };
-    clap_complete::generate(generator, &mut command, bin_name, &mut script);
-    if matches!(shell, CompletionShell::Fish) {
-        // clap_complete's Fish generator does not emit positional values.
-        let shells = CompletionShell::value_variants()
-            .iter()
-            .filter_map(ValueEnum::to_possible_value)
-            .map(|value| value.get_name().to_owned())
-            .collect::<Vec<_>>()
-            .join(" ");
-        writeln!(
-            &mut script,
-            "\ncomplete -c aigate-cli -n '__fish_aigate_cli_using_subcommand init; and not __fish_seen_subcommand_from {shells}' -f -a '{shells}'"
-        )
-        .context("无法生成 Fish shell 名称补全")?;
-    }
-    let script = String::from_utf8(script).context("shell 初始化脚本不是 UTF-8")?;
-    let script = if matches!(shell, CompletionShell::Bash) {
-        script.replace(" aigate_cli\n", " aigate-cli\n")
-    } else {
-        script
-    };
+    let script = completions::generate(Cli::command(), shell)?;
     io::stdout()
         .lock()
         .write_all(script.as_bytes())
@@ -233,9 +184,27 @@ fn positive_id(raw: &str) -> std::result::Result<i64, String> {
 }
 
 impl Cli {
+    fn profile(&self) -> auth::Profile {
+        if matches!(self.command, Command::Workflow(_)) {
+            auth::Profile::Workflow
+        } else {
+            auth::Profile::Compute
+        }
+    }
+
+    fn origin(&self) -> &str {
+        self.base_url
+            .as_deref()
+            .unwrap_or_else(|| self.profile().origin())
+    }
+
     fn validate(&self) -> std::result::Result<(), clap::Error> {
+        if let Err(error) = task_commands::validate(&self.command) {
+            // Clap value parsers echo the rejected value; an accidental signed URL must stay private.
+            return Err(Self::command().error(clap::error::ErrorKind::ValueValidation, error));
+        }
         if !matches!(&self.command, Command::Init { .. } | Command::Regions) {
-            if let Err(error) = normalize_origin(&self.base_url) {
+            if let Err(error) = normalize_origin(self.origin()) {
                 // Use only the fixed diagnostic; never echo credentials embedded
                 // in a rejected URL, including for offline previews.
                 return Err(Self::command().error(clap::error::ErrorKind::ValueValidation, error));
@@ -282,7 +251,7 @@ fn confirm(expected: &str, yes: bool) -> Result<()> {
 }
 
 fn client(cli: &Cli) -> Result<Client> {
-    let base = normalize_origin(&cli.base_url)?;
+    let base = normalize_origin(cli.origin())?;
     Client::new(
         auth::resolve(&base)?,
         base.as_str(),
@@ -312,12 +281,14 @@ fn accepted(cli: &Cli, action: &str, id: i64) -> Result<()> {
 
 async fn run(cli: Cli) -> Result<()> {
     match &cli.command {
+        Command::Workflow(args) => task_commands::workflow(&cli, args).await,
+        Command::Comfy(args) => task_commands::comfy(&cli, args).await,
         Command::Login => {
-            auth::require_keyring_origin(&normalize_origin(&cli.base_url)?)?;
+            auth::require_keyring_origin(&normalize_origin(cli.origin())?)?;
             auth::login()
         }
         Command::Logout => {
-            auth::require_keyring_origin(&normalize_origin(&cli.base_url)?)?;
+            auth::require_keyring_origin(&normalize_origin(cli.origin())?)?;
             auth::logout()
         }
         Command::Init { shell } => init_shell(*shell),
@@ -474,13 +445,13 @@ async fn run(cli: Cli) -> Result<()> {
             };
             if args.dry_run {
                 return emit(
-                    json!({"dryRun": true, "method": "POST", "origin": cli.base_url, "path": "/api/openapi/instance/start", "body": request}),
+                    json!({"dryRun": true, "method": "POST", "origin": cli.origin(), "path": "/api/openapi/instance/start", "body": request}),
                     false,
                 );
             }
             eprintln!(
                 "即将在 {} 创建并启动新实例，可能立即计费：\n{}",
-                cli.base_url,
+                cli.origin(),
                 serde_json::to_string_pretty(&request)?
             );
             confirm("create", args.yes)?;
@@ -505,13 +476,13 @@ async fn run(cli: Cli) -> Result<()> {
         } => {
             if *dry_run {
                 return emit(
-                    json!({"dryRun": true, "method": "GET", "origin": cli.base_url, "path": "/api/openapi/instance/release", "query": {"instanceId": instance_id.to_string()}}),
+                    json!({"dryRun": true, "method": "GET", "origin": cli.origin(), "path": "/api/openapi/instance/release", "query": {"instanceId": instance_id.to_string()}}),
                     false,
                 );
             }
             eprintln!(
                 "即将在 {} 释放实例 {instance_id}，实例资源会被删除，请确认已备份所需数据。",
-                cli.base_url
+                cli.origin()
             );
             confirm(&instance_id.to_string(), *yes)?;
             client(&cli)?.release(*instance_id).await?;

@@ -25,18 +25,18 @@
 - macOS：使用原生 Rust 工具链和系统开发工具，经 Cargo 构建；Makefile 的 GNU 工具参数尚未适配原生 macOS。
 - Windows：使用 MSVC Rust 工具链及 C++ 构建工具，在原生 PowerShell 中运行 Cargo；产物带 `.exe`。工具链要求见 [Rustup 安装说明](https://rust-lang.github.io/rustup/installation/windows-msvc.html)。
 
-WSL 属于 Linux 环境。Git Bash 与原生 PowerShell 分别验收，跨目标编译成功也不能代替目标系统运行验证。补全目前仅支持 Bash、Zsh、Fish，尚未实现 PowerShell 补全。
+WSL 属于 Linux 环境。Git Bash 与原生 PowerShell 分别验收，跨目标编译成功也不能代替目标系统运行验证。当前源码支持 Bash、Zsh、Fish、PowerShell 7+、Clink 1.x（含 Cmder）和 Nushell 补全，加载方法见 [README](../README.md#shell-自动补全)。新增补全不包含在 `v0.1.0-beta.1` 中。
 
-Linux/macOS 可用 `env -u AIGATE_TOKEN aigate-cli ...` 排除当前命令的环境凭证覆盖。PowerShell 先执行 `Remove-Item Env:AIGATE_TOKEN -ErrorAction SilentlyContinue`，再执行 CLI；该移除只作用于当前会话，不读取或打印原值。
+Linux/macOS 可用 `env -u AIGATE_TOKEN aigate-cli ...` 排除算力 / Comfy 的环境凭证覆盖；Workflow 对应 `AIGATE_WORKFLOW_TOKEN`。PowerShell 先执行 `Remove-Item Env:AIGATE_TOKEN -ErrorAction SilentlyContinue`，Workflow 将变量名换为 `AIGATE_WORKFLOW_TOKEN`，再执行 CLI；该移除只作用于当前会话，不读取或打印原值。
 
 ## 原生环境验收
 
 自动测试及通用手动步骤统一见 [开发与测试](development.md#自动测试)。每个平台记录操作系统版本、架构、Rust 版本和实际执行 / 跳过的检查，另外验收：
 
-- 原生凭证的写入、读取、更新、删除、锁定或不可用行为。使用独立测试条目；CLI 固定使用 `aigate-cli/default`，其完整登录 / 删除测试应在独立操作系统账户中进行，保留日常登录。
+- 原生凭证的写入、读取、更新、删除、锁定或不可用行为。使用独立测试条目；算力 / Comfy 使用 `aigate-cli/default`，Workflow 使用 `aigate-cli/workflow`，完整登录 / 删除测试应在独立操作系统账户中进行，保留日常登录。Workflow 新条目的原生读写仍待验收。
 - 交互式隐藏输入、中文显示、CRLF / EOF、管道与 JSON 重定向。
 - 仓库、构建目录和安装路径包含空格、中文时的行为。
-- 所支持 shell 的脚本加载与交互式 Tab；非 Unix 不编译 shell 执行测试，不能报告为已执行通过。
+- 所支持 shell 的脚本加载与交互式 Tab；Bash/Zsh/Fish 测试仅在 Unix 编译，PowerShell/Nushell/Lua 检查在对应运行时可用的平台执行。Lua harness 只验证 Clink 注册和参数链接，原生 Clink/Cmder 的交互式 Tab 仍需 Windows 验收。
 
 凭证库不可用时应报错，不回退到明文配置；官方凭证不得发送到自定义 origin。CI 使用本地 mock 和占位凭证；真实云资源验收另按用户授权执行。
 
