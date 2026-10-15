@@ -96,7 +96,7 @@ cargo build --release --locked --bin aigate-cli
 
 Cargo 是三平台的主要构建入口，无需 Make。Linux 可用 `make check` 运行格式、clippy、Rust 测试、安装及发行脚本回归，`make build` 验证 release 构建。发行脚本回归另外需要 Git、jq、Bash 与 GNU tar / gzip / coreutils，在临时仓库中测试，不修改项目的 Git 历史。`bash tests/nightly.sh` 通过 mock GitHub CLI 验证首次发布、滚动更新、校验失败与恢复草稿，不调用真实 GitHub API。工具链由 `rust-toolchain.toml` 固定；更新工具链时重新运行全部检查。依赖和构建目录遵循 Cargo 默认值；需要隔离缓存时由执行环境覆盖 `CARGO_HOME`、`CARGO_TARGET_DIR`。
 
-CI 配置在 Ubuntu 24.04、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；Windows 不运行 Unix shell 补全测试，macOS 安装 Fish 后运行 Bash / Zsh / Fish 检查。新增工作流尚需远端运行，配置本身不代表平台验收通过。
+CI 在 Ubuntu 24.04、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；Windows 不运行 Unix shell 补全测试，macOS 安装 Fish 后运行 Bash / Zsh / Fish 检查。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。原生 CI 不代替桌面凭证库和真实 API 验收。
 
 | 测试 | 维护范围 |
 | --- | --- |
