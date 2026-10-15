@@ -3,11 +3,13 @@ use aigate_cli::client::{normalize_origin, Client};
 use aigate_cli::models::{parse_positive_id, status_label, CreateRequest, AREAS};
 use aigate_cli::output;
 use anyhow::{bail, Context, Result};
-use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{json, Value};
 use std::io::{self, IsTerminal, Write};
 use std::time::Duration;
+mod completions;
 mod task_commands;
+use completions::CompletionShell;
 
 const BUILD_VERSION: &str = match option_env!("AIGATE_BUILD_VERSION") {
     Some(version) => version,
@@ -106,64 +108,8 @@ enum Command {
     },
 }
 
-#[derive(Clone, Copy, ValueEnum)]
-enum CompletionShell {
-    Bash,
-    Zsh,
-    Fish,
-}
-
 fn init_shell(shell: CompletionShell) -> Result<()> {
-    let generator = match shell {
-        CompletionShell::Bash => clap_complete::Shell::Bash,
-        CompletionShell::Zsh => clap_complete::Shell::Zsh,
-        CompletionShell::Fish => clap_complete::Shell::Fish,
-    };
-    // Add suggestions to the completion schema only; runtime area/status
-    // validation remains forward-compatible with new values from the API.
-    let mut command = Cli::command()
-        .mut_subcommand("skus", |cmd| {
-            cmd.mut_arg("area", |arg| arg.value_parser(AREAS))
-        })
-        .mut_subcommand("images", |cmd| {
-            cmd.mut_arg("area", |arg| arg.value_parser(AREAS))
-        })
-        .mut_subcommand("create", |cmd| {
-            cmd.mut_arg("area", |arg| arg.value_parser(AREAS))
-        })
-        .mut_subcommand("list", |cmd| {
-            cmd.mut_arg("operation_status", |arg| arg.value_parser(["2", "4"]))
-        });
-    let mut script = Vec::new();
-    // clap_complete 4.6.11 builds inconsistent Bash subcommand paths for
-    // hyphenated binary names. Use an underscore internally and rename only
-    // the command registered with `complete` in the generated script below.
-    let bin_name = if matches!(shell, CompletionShell::Bash) {
-        "aigate_cli"
-    } else {
-        "aigate-cli"
-    };
-    clap_complete::generate(generator, &mut command, bin_name, &mut script);
-    if matches!(shell, CompletionShell::Fish) {
-        // clap_complete's Fish generator does not emit positional values.
-        let shells = CompletionShell::value_variants()
-            .iter()
-            .filter_map(ValueEnum::to_possible_value)
-            .map(|value| value.get_name().to_owned())
-            .collect::<Vec<_>>()
-            .join(" ");
-        writeln!(
-            &mut script,
-            "\ncomplete -c aigate-cli -n '__fish_aigate_cli_using_subcommand init; and not __fish_seen_subcommand_from {shells}' -f -a '{shells}'"
-        )
-        .context("无法生成 Fish shell 名称补全")?;
-    }
-    let script = String::from_utf8(script).context("shell 初始化脚本不是 UTF-8")?;
-    let script = if matches!(shell, CompletionShell::Bash) {
-        script.replace(" aigate_cli\n", " aigate-cli\n")
-    } else {
-        script
-    };
+    let script = completions::generate(Cli::command(), shell)?;
     io::stdout()
         .lock()
         .write_all(script.as_bytes())

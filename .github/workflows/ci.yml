@@ -32,6 +32,8 @@ env:
 jobs:
   checks:
     name: Linux checks
+    env:
+      AIGATE_REQUIRE_LUA: '1'
     if: ${{ !inputs.audit_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -43,7 +45,7 @@ jobs:
       - name: Install native and shell dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish
+          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish lua5.4
       - name: Install the pinned Rust toolchain
         run: rustup show active-toolchain
       - name: Check, test and build
@@ -60,6 +62,10 @@ jobs:
 
   native:
     name: ${{ matrix.name }} checks
+    env:
+      AIGATE_REQUIRE_POWERSHELL: ${{ matrix.name == 'Windows' && '1' || '0' }}
+      AIGATE_REQUIRE_NUSHELL: ${{ matrix.name == 'macOS' && '1' || '0' }}
+      AIGATE_REQUIRE_LUA: ${{ matrix.name != 'Windows' && '1' || '0' }}
     if: ${{ !inputs.audit_only }}
     strategy:
       fail-fast: false
@@ -82,10 +88,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish
+          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish lua5.4
       - name: Install macOS shell dependencies
         if: runner.os == 'macOS'
-        run: brew install fish
+        run: brew install fish nushell lua
       - name: Install the pinned Rust toolchain
         run: rustup show active-toolchain
       - name: Check formatting

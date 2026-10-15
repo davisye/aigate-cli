@@ -2,9 +2,18 @@
 
 通过命令行管理云扉 AIGate GPU 资源、实例与生成任务。
 
+[![CI](https://github.com/davisye/aigate-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/davisye/aigate-cli/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+
 AIGate CLI 面向个人账户，支持算力 OpenAPI、Workflow API 和 Comfy API，提供系统凭证存储、JSON 输出和 shell 自动补全。
 
-[快速开始](#快速开始) · [安装与构建](#构建与运行) · [Nightly 下载](#nightly-预编译版本) · [命令指南](#命令指南) · [CI 与自动化](#ci-与自动化) · [自动补全](#shell-自动补全) · [Agent 使用](#agent-使用) · [文档](#文档与开发) · [TODO](#todo)
+[快速开始](#快速开始) · [下载安装](#构建与运行) · [认证](#认证) · [命令指南](#命令指南) · [自动化](#ci-与自动化) · [自动补全](#shell-自动补全) · [Agent 使用](#agent-使用) · [开发与测试](#开发与测试) · [文档](#文档与开发)
+
+```bash
+aigate-cli regions              # 离线查看区域，无需登录
+aigate-cli status               # 查看计费中实例的状态总览
+aigate-cli list --all --json     # 获取全部分页，供脚本处理
+```
 
 ## 特性
 
@@ -13,24 +22,32 @@ AIGate CLI 面向个人账户，支持算力 OpenAPI、Workflow API 和 Comfy AP
 - **生成任务**：Workflow 与 Comfy 的任务提交、状态和结果查询、文件上传；提交前支持离线预览与明确确认。
 - **凭证存储**：通过系统 Keyring 保存 Token，也可使用进程环境变量认证。
 - **自动化输出**：提供 JSON、稳定的退出码和默认脱敏，便于脚本及 Agent 调用。
-- **Shell 集成**：支持 Bash、Zsh、Fish 的离线补全，由用户自行配置加载。
+- **Shell 集成**：支持 Bash、Zsh、Fish、PowerShell、Clink/Cmder 和 Nushell 的离线补全，由用户自行配置加载。
 
-目前已在 **Arch Linux x86_64** 验证，并通过 **Ubuntu 24.04 x86_64** 的 CI 构建与自动测试。Ubuntu 桌面凭证、macOS 与 Windows 的实机功能仍待验收，详见 [平台支持](docs/platforms.md)。
+**发行状态：**已发布 [v0.1.0-beta.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-beta.1) 和滚动更新的 [Nightly](https://github.com/davisye/aigate-cli/releases/tag/nightly)，v0.1.0 正式版尚未发布。Linux x86_64 / ARM64、macOS Apple Silicon 与 Windows x64 已通过 [原生 CI](https://github.com/davisye/aigate-cli/actions/runs/38705874649)，[Beta](https://github.com/davisye/aigate-cli/actions/runs/38706019289) 与 [Nightly](https://github.com/davisye/aigate-cli/actions/runs/38706021555) 的四目标构建和离线运行检查也已通过。Arch Linux 的本机与真实 API 验证记录、其他平台待验收的桌面凭证及真实 API 功能见 [平台支持](docs/platforms.md)。
 
 ## 快速开始
 
-以下示例面向个人桌面环境的日常使用，适用于 Linux 的 Bash、Zsh 和 Fish。登录后使用系统 Keyring，无需设置环境变量。在仓库根目录执行，先准备 [构建依赖](#构建与运行)，并确保安装目录已加入 PATH。
+以下示例面向个人桌面终端。登录后复用系统 Keyring，无需设置环境变量；CI、服务器与无桌面环境见 [CI 与自动化](#ci-与自动化)。
 
-### 1. 安装
+### 1. 安装并检查
+
+从 [Beta 下载表](#beta-预发行版) 选择对应平台的压缩包，按 [校验与安装](#预编译包校验与安装) 完成安装；无需安装 Rust。也可选择滚动更新的 [Nightly](#nightly-预编译版本)，或使用 [源码安装](#源码安装)。
 
 ```bash
-git clone https://github.com/davisye/aigate-cli.git
-cd aigate-cli
-cargo install --path . --locked
 aigate-cli --version
+aigate-cli --help
+aigate-cli regions --json
 ```
 
-Cargo 默认安装到当前用户的 `~/.cargo/bin`（Windows 为 `%USERPROFILE%\.cargo\bin`），无需管理员权限；原生 PowerShell 也使用上述 Cargo 命令。PATH 配置和其他安装方式见下文。
+`regions` 离线输出以下结果，不读取凭证或访问 API：
+
+```json
+[
+  "华东一区",
+  "华东二区"
+]
+```
 
 ### 2. 登录
 
@@ -55,13 +72,11 @@ aigate-cli list --all --json
 
 ## 构建与运行
 
-需要 Rustup；仓库通过 `rust-toolchain.toml` 固定 Rust 1.97.1，Rustup 会在需要时安装该工具链。最低 Rust 版本尚未验证。Linux 源码构建需要 `pkg-config` 和 D-Bus 开发文件，Keyring 需要可用的 Secret Service（例如 GNOME Keyring）。使用 Makefile 还需要 GNU Make 和 GNU `install`。其他平台要求见 [平台说明](docs/platforms.md#构建与终端差异)。
-
-本次预发行版本为 `v0.1.0-beta.1`，正式版 `v0.1.0` 尚未发布。Beta 与 nightly 提供四个平台的预编译包。本地功能分支中的生成 API 已完成 mock 验证，尚未纳入本次 beta；真实任务与上传仍待验收，详见 [开发文档](docs/development.md#生成-api-验证边界)。
+直接使用可选择 Beta 或 Nightly 四目标预编译包；开发或自行构建可从源码安装。本文的 Workflow、Comfy API 和新增 shell 补全对应当前源码，未包含在 `v0.1.0-beta.1` 中；Nightly 是否包含这些功能取决于其构建提交，可通过 `--help` 和 `init --help` 核对。生成 API 已完成本地 mock 验证，真实任务与上传仍待验收，详见 [验证边界](docs/development.md#生成-api-验证边界)。
 
 ### Beta 预发行版
 
-对应 tag 的全部测试、审计和打包检查通过后，可从 [v0.1.0-beta.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-beta.1) 下载带版本号的附件：
+从 [v0.1.0-beta.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-beta.1) 下载对应平台的压缩包及同次发行的 `SHA256SUMS`，也可下载 [源码包](https://github.com/davisye/aigate-cli/releases/download/v0.1.0-beta.1/aigate-cli-0.1.0-beta.1-source.tar.gz)。该标签的测试、审计和四目标打包检查均已通过。
 
 | 平台 | 下载 |
 | --- | --- |
@@ -71,11 +86,11 @@ aigate-cli list --all --json
 | macOS Apple Silicon | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.0-beta.1/aigate-cli-0.1.0-beta.1-aarch64-apple-darwin.tar.gz) |
 | 校验和 | [SHA256SUMS](https://github.com/davisye/aigate-cli/releases/download/v0.1.0-beta.1/SHA256SUMS) |
 
-解压后使用 `./aigate-cli --version`（Windows 为 `./aigate-cli.exe --version`）核对 `0.1.0-beta.1`。运行依赖、PATH 与校验方法见下文，平台基线见 [平台说明](docs/platforms.md)。Beta 标签和附件不覆盖更新；后续修复发布新的 beta 编号。
+解压后使用 `./aigate-cli --version`（Windows 为 `./aigate-cli.exe --version`）核对 `0.1.0-beta.1`。运行依赖、PATH 与校验方法见 [预编译包校验与安装](#预编译包校验与安装)，平台基线见 [平台说明](docs/platforms.md)。Beta 标签和附件不覆盖更新；后续修复发布新的 beta 编号。
 
 ### Nightly 预编译版本
 
-Nightly 配置合入 `main`、维护者完成 [发行设置](docs/development.md#nightly-自动发行)，且工作流首次成功后，可从固定的 [nightly 预发行版](https://github.com/davisye/aigate-cli/releases/tag/nightly) 下载，无需安装 Rust 或 Make：
+从 [nightly 预发行版](https://github.com/davisye/aigate-cli/releases/tag/nightly) 下载对应平台的压缩包及同次发行的 `SHA256SUMS`。Nightly 是滚动更新的预发行版；希望自行构建时可下载同次 [源码包](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-source.tar.gz)。
 
 | 平台 | 固定下载地址 |
 | --- | --- |
@@ -85,15 +100,55 @@ Nightly 配置合入 `main`、维护者完成 [发行设置](docs/development.md
 | macOS Apple Silicon（macOS 15 构建基线） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-aarch64-apple-darwin.tar.gz) |
 | 校验和 | [SHA256SUMS](https://github.com/davisye/aigate-cli/releases/download/nightly/SHA256SUMS) |
 
-Windows 解压 ZIP，在 PowerShell 中先运行 `./aigate-cli.exe --version`，再将程序所在目录加入用户 PATH。可用 `Get-FileHash ./aigate-cli-nightly-x86_64-pc-windows-msvc.zip -Algorithm SHA256` 与同次下载的 `SHA256SUMS` 比较。
+固定链接会随成功构建更新；`--version` 显示基础版本、nightly UTC 日期及提交号。Nightly 标记为 prerelease，不作为正式版 Latest。每天北京时间 03:23 调度，未变化的提交跳过发布；GitHub 调度可能延迟，手动运行可重新构建同一提交。校验不一致时重新下载压缩包与校验和，避免混用更新前后的文件；维护发行流程见 [Nightly 自动发行](docs/development.md#nightly-自动发行)。
 
-Linux / macOS 解压后运行 `./aigate-cli --version`，再放入 PATH 中的用户目录。Linux 需要运行时 D-Bus 库（Ubuntu 包名 `libdbus-1-3`）；桌面登录仍需 Secret Service。包内含许可、文档与 `BUILD-INFO.txt`。二进制未签名或公证；平台功能验收边界见 [平台说明](docs/platforms.md)。
+### 预编译包校验与安装
 
-固定链接会随成功构建更新；`--version` 显示基础版本、nightly UTC 日期及提交号。Nightly 标记为 prerelease，不作为正式版 Latest。每天北京时间 03:23 调度，未变化的提交跳过发布；GitHub 调度可能延迟，手动运行可重新构建同一提交。
+以下以 Beta 为例。使用 Nightly 时，将文件名替换为上表中对应目标的 Nightly 文件名，并使用同次 Nightly 下载的 `SHA256SUMS`。
+
+**Linux x86_64**：在下载目录执行以下命令。Ubuntu 24.04 需要运行时 D-Bus 库 `libdbus-1-3`；桌面登录还需可用的 Secret Service（例如 GNOME Keyring）。
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+确认校验输出为 `OK` 后，再执行解压和安装。`--ignore-missing` 跳过未下载的其他平台包：
+
+```bash
+tar -xzf aigate-cli-0.1.0-beta.1-x86_64-unknown-linux-gnu.tar.gz
+./aigate-cli --version
+mkdir -p "$HOME/.local/bin"
+install -m755 ./aigate-cli "$HOME/.local/bin/aigate-cli"
+```
+
+Linux ARM64 将解压文件名换为 `aigate-cli-0.1.0-beta.1-aarch64-unknown-linux-gnu.tar.gz`，其他步骤相同。安装目录须加入 PATH，方法见 [源码安装](#源码安装)。Linux 包基于 Ubuntu 24.04 / glibc 2.39 构建，未声明兼容更早的 glibc。
+
+**macOS Apple Silicon**：使用 `shasum -a 256 aigate-cli-0.1.0-beta.1-aarch64-apple-darwin.tar.gz` 计算下载包的校验和，与 `SHA256SUMS` 中对应文件的值比较；解压后先运行 `./aigate-cli --version`，再将程序放入 PATH 中的用户目录。构建基线为 macOS 15。
+
+**Windows x64**：使用 `Get-FileHash ./aigate-cli-0.1.0-beta.1-x86_64-pc-windows-msvc.zip -Algorithm SHA256` 计算校验和，与 `SHA256SUMS` 比较；解压 ZIP 后在 PowerShell 运行 `./aigate-cli.exe --version`，再将程序所在目录加入用户 PATH。
+
+各二进制压缩包包含许可、文档与 `BUILD-INFO.txt`，可核对版本、提交和目标平台。二进制未签名或公证；平台功能验收边界见 [平台说明](docs/platforms.md)。
 
 ### 源码安装
 
-以下命令均在仓库根目录执行，选择一种安装方式：
+需要 Git 和 [Rustup](https://rust-lang.github.io/rustup/installation/index.html)。仓库通过 `rust-toolchain.toml` 固定 Rust 1.97.1，Rustup 会在需要时安装该工具链；最低 Rust 版本尚未验证。
+
+- Linux：构建需要 `pkg-config` 和 D-Bus 开发文件；Ubuntu 24.04 可用 `sudo apt-get install pkg-config libdbus-1-dev` 安装。Keyring 登录需要可用的 Secret Service。
+- macOS：使用原生 Rust 工具链与系统开发工具。
+- Windows：使用 MSVC Rust 工具链及 C++ 构建工具，在原生 PowerShell 中运行 Cargo。
+
+先克隆仓库并执行 Cargo 安装：
+
+```bash
+git clone --branch main https://github.com/davisye/aigate-cli.git
+cd aigate-cli
+cargo install --path . --locked
+aigate-cli --version
+```
+
+Cargo 默认安装到当前用户的 `~/.cargo/bin`（Windows 为 `%USERPROFILE%\.cargo\bin`），无需管理员权限；确保该目录已加入 PATH。源码安装使用上述 `--path .` 方式。
+
+也可在仓库根目录选择以下方式；Makefile 仅作为 Linux 便利入口，需要 GNU Make 和 GNU `install`。其他平台要求见 [平台说明](docs/platforms.md#构建与终端差异)。
 
 | 方式 | 命令 | 默认安装位置 |
 | --- | --- | --- |
@@ -120,7 +175,8 @@ Cargo 安装是各平台的源码安装入口；macOS / Windows 的验收状态�
 | --- | --- |
 | 构建 release | `cargo build --release --locked`；Linux 也可用 `make build` |
 | 从源码运行 | `cargo run --locked -- --help` |
-| 更新 | 重新执行所选安装命令 |
+| 更新源码安装 | 在 Git 克隆目录运行 `git pull --ff-only`，再执行所选安装命令；源码包安装则下载新版源码 |
+| 更新 / 卸载预编译包 | 校验并替换所安装的程序 / 删除程序文件 |
 | 卸载 Make 个人安装 | `make uninstall` |
 | 卸载 Make 全局安装 | `sudo make uninstall` |
 | 卸载 Cargo 安装 | `cargo uninstall aigate-cli` |
@@ -222,9 +278,7 @@ aigate-cli create --sku GPU_SKU --area 华东一区 --image-id IMAGE_ID --image-
 
 `--sku` 与 `--gpu-model` 二选一；区域、镜像 ID 和类型须明确指定。GPU 数量为 1–8，默认 1。`--yes` 与 `--dry-run` 互斥。
 
->
-> 当前云菲 aigete 没有提供官方系统镜像ID获取API。所以创建实例需要先手动创建容器并保存为个人镜像，或者使用社区镜像进行容器创建。
->
+镜像 ID 必须来自实际查询结果；当前实现只支持个人镜像 `3` 与社区镜像 `2`。需要官方环境时，先在控制台创建实例并保存为个人镜像，再通过 `images --all` 查询。
 
 ### 开关机与释放
 
@@ -414,7 +468,43 @@ if status is-interactive
 end
 ```
 
-重新打开终端后按 Tab 可补全命令、别名、选项、区域、镜像类型、筛选状态、上传媒体类型和 shell 名称，包括 `workflow`、`comfy` 的子命令。资源与任务 ID 需先查询或从提交结果获取；尚未实现 PowerShell 补全。
+**PowerShell 7+** — 在 `$PROFILE` 中添加：
+
+```powershell
+aigate-cli init powershell | Out-String | Invoke-Expression
+```
+
+首次使用且配置文件不存在时，可先执行 `New-Item -ItemType File -Path $PROFILE -Force`，再编辑该文件。脚本同时注册 `aigate-cli` 和 `aigate-cli.exe` 的补全。
+
+**Clink / Cmder** — 适用于带 Clink 1.x 的 `cmd.exe`。先运行 `clink info` 查看脚本目录，在该目录生成 `aigate-cli.lua`；例如 Clink 默认 profile 目录：
+
+```bat
+aigate-cli init clink > "%LOCALAPPDATA%\clink\aigate-cli.lua"
+```
+
+目录须已存在；使用自定义 Clink profile 时替换为 `clink info` 显示的目录。Cmder 在其已加载的配置目录生成：
+
+```bat
+aigate-cli init clink > "%CMDER_ROOT%\config\aigate-cli.lua"
+```
+
+`init cmder` 是 `init clink` 的别名。重新打开终端后加载 Lua 脚本；Cmder 中的 PowerShell 标签页使用上面的 PowerShell 配置。脚本加载路径可参考 [Clink 文档](https://chrisant996.github.io/clink/clink.html#location-of-lua-scripts)。
+
+**Nushell** — 先在 Nu 中生成补全文件：
+
+```nu
+aigate-cli init nushell | save --force ($nu.default-config-dir | path join "aigate-cli.nu")
+```
+
+然后在 `$nu.config-path` 指向的 `config.nu` 中添加下行，重新打开终端：
+
+```nu
+source ($nu.default-config-dir | path join "aigate-cli.nu")
+```
+
+`init nu` 是 `init nushell` 的别名。补全通过 Nushell 的 `extern` 声明加载；需先生成文件，再加载配置，详见 [Nushell 补全文档](https://www.nushell.sh/book/custom_completions.html)。
+
+升级 CLI 后，Clink/Cmder 和 Nushell 需重新生成上述补全文件。重新打开终端后按 Tab 可补全命令、别名、选项、区域、镜像类型、筛选状态、上传媒体类型和 shell 名称，包括 `workflow`、`comfy` 的子命令。资源与任务 ID 需先查询或从提交结果获取。
 
 ## Agent 使用
 
@@ -438,7 +528,22 @@ end
 | [安全政策](SECURITY.md) | 安全问题的私密报告方式 |
 | [更新记录](CHANGELOG.md) | 未发布变化与发行记录 |
 
-各平台以 Cargo 运行格式、clippy 和 Rust 测试，命令见开发文档。Linux 另可用 `make check` 一并运行安装及发行脚本回归；脚本测试还需 Git、jq，完整补全检查需 Bash、Zsh、Fish。CI 配置包含 Linux、Windows 和 macOS 原生检查；已执行的平台验收记录见平台说明。自动测试使用本地 HTTP mock 和占位凭证，不操作真实云资源。
+问题反馈请按 [贡献指南](CONTRIBUTING.md) 提供版本、系统、shell、脱敏命令和退出码；凭证泄漏或漏洞请按 [安全政策](SECURITY.md) 私密报告。
+
+## 开发与测试
+
+准备 [源码构建依赖](#源码安装) 后，在仓库根目录运行：
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
+cargo build --release --locked --bin aigate-cli
+```
+
+Linux 也可运行 `AIGATE_REQUIRE_SHELLS=1 make check`，一并检查格式、clippy、Rust 测试、安装及发行脚本回归。脚本测试还需 Git、jq；该命令要求 Bash、Zsh、Fish。新增补全检查按可用的 `pwsh`、`nu` 和 `lua` 运行，严格运行全部检查的方法见 [开发文档](docs/development.md#自动测试)。自动测试使用本地 HTTP mock 和占位凭证，不操作真实云资源。
+
+CI 在 Linux、Windows 和 macOS 上执行原生检查。自动化覆盖范围、手动验收和发行流程见 [开发文档](docs/development.md#自动测试)，已执行的平台验收记录见 [平台支持](docs/platforms.md)。
 
 ## TODO
 

@@ -6,7 +6,8 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main.rs` | clap 命令树、参数校验、操作预览与确认、输出选择、shell 初始化 |
+| `src/main.rs` | clap 命令树、参数校验、操作预览与确认、输出选择 |
+| `src/completions.rs`、`src/completions/powershell.ps1` | 从命令树生成 shell 初始化脚本及离线候选 |
 | `src/auth.rs` | Token 规范化、环境变量优先级、官方 origin 与 Keyring 绑定 |
 | `src/client.rs` | HTTP、响应校验、分页、开关机前置状态 |
 | `src/generation.rs` | Workflow / Comfy 请求、任务响应校验、文件预检与流式上传 |
@@ -85,6 +86,8 @@ Studio 为 `https://studio.aigate.cc`，WAAS 为 `https://waas.aigate.cc`。Work
 
 锁定的 `clap_complete` 版本对带连字符的 Bash 程序名生成不一致的子命令路径，因此内部用 `aigate_cli` 生成，再改回注册名。Fish 生成器缺少位置参数候选，额外规则从 `CompletionShell` 枚举生成。升级依赖时检查这些兼容处理能否移除，并运行 shell 执行检查。
 
+PowerShell 使用静态命令树和原生 `Register-ArgumentCompleter`，识别全局选项、别名、引号、位置参数和 `--flag=value`；文件参数交给原生文件补全。Clink 输出 Lua `argmatcher`，链接子命令、选项取值和文件参数，Cmder 共用该脚本。Nushell 使用 `clap_complete_nushell` 生成 `extern` 声明，并补上生成器未输出的可见命令别名。三者均不在 Tab 时调用 CLI 或访问 API。
+
 ## 自动测试
 
 ```text
@@ -96,7 +99,7 @@ cargo build --release --locked --bin aigate-cli
 
 Cargo 是三平台的主要构建入口，无需 Make。Linux 可用 `make check` 运行格式、clippy、Rust 测试、安装及发行脚本回归，`make build` 验证 release 构建。发行脚本回归另外需要 Git、jq、Bash 与 GNU tar / gzip / coreutils，在临时仓库中测试，不修改项目的 Git 历史。`bash tests/nightly.sh` 通过 mock GitHub CLI 验证首次发布、滚动更新、校验失败与恢复草稿，不调用真实 GitHub API。工具链由 `rust-toolchain.toml` 固定；更新工具链时重新运行全部检查。依赖和构建目录遵循 Cargo 默认值；需要隔离缓存时由执行环境覆盖 `CARGO_HOME`、`CARGO_TARGET_DIR`。
 
-CI 在 Ubuntu 24.04 x86_64 / ARM64、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；Windows 不运行 Unix shell 补全测试，macOS 安装 Fish 后运行 Bash / Zsh / Fish 检查。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。原生 CI 不代替桌面凭证库和真实 API 验收。
+CI 在 Ubuntu 24.04 x86_64 / ARM64、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；shell 运行时要求见下文。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。原生 CI 不代替桌面凭证库和真实 API 验收。
 
 | 测试 | 维护范围 |
 | --- | --- |
@@ -105,17 +108,23 @@ CI 在 Ubuntu 24.04 x86_64 / ARM64、Windows 2025 x64、macOS 15 Apple Silicon �
 | `tests/cli.rs` | 真实进程的参数、确认拦截、退出码、stdout/stderr、JSON、状态总览与空账户、离线命令、凭证边界 |
 | `tests/generation_api.rs` | 两套任务 API 的方法、参数、状态和 ID、无效响应、上传大小与 multipart、实例选择、无认证上传、重试及重定向 |
 | `tests/generation_cli.rs` | 生成命令的离线预览、提交确认、独立凭证、输入校验、退出码、JSON 与签名链接脱敏 |
-| `tests/completions.rs` | Unix 上 Bash/Fish 的补全候选，Zsh 的加载与注册 |
+| `tests/completions.rs` | Bash/Fish 和 PowerShell/Nushell 的补全候选、Zsh 的加载与注册、Lua harness 中的 Clink 注册与参数链接 |
 | `tests/makefile.sh` | Linux 安装、卸载、clean、sudo 构建环境、含空格路径和构建失败；使用模拟命令与临时目录 |
 | `tests/release.sh` | 临时 Git 仓库中的标签与版本、主分支归属、脏工作区、发行说明、源码包内容、校验和与重复打包一致性 |
 
-CI 仅使用本地 mock 和占位凭证。要求完整补全检查的 Unix 环境须准备 Bash、Zsh、Fish，并运行：
+CI 仅使用本地 mock 和占位凭证。要求原有三种 shell 补全检查的 Unix 环境须准备 Bash、Zsh、Fish，并运行：
 
 ```sh
 env AIGATE_REQUIRE_SHELLS=1 cargo test --locked --test completions -- --nocapture
 ```
 
-普通模式缺少 shell 时会跳过，`--nocapture` 显示原因；严格模式下 shell 缺失或版本命令失败均导致测试失败。非 Unix 平台不编译 shell 执行测试。记录实际执行和跳过项，不能只凭测试命令退出成功报告补全验收通过。
+普通模式缺少 shell 时会跳过，`--nocapture` 显示原因；严格模式下 shell 缺失或版本命令失败均导致测试失败。Bash/Zsh/Fish 执行测试仅在 Unix 编译；PowerShell、Nushell 与 Lua 检查跨平台编译，可分别通过 `AIGATE_REQUIRE_POWERSHELL=1`、`AIGATE_REQUIRE_NUSHELL=1`、`AIGATE_REQUIRE_LUA=1` 要求运行时存在。全部运行时已安装时，可运行：
+
+```sh
+env AIGATE_REQUIRE_SHELLS=1 AIGATE_REQUIRE_POWERSHELL=1 AIGATE_REQUIRE_NUSHELL=1 AIGATE_REQUIRE_LUA=1 cargo test --locked --test completions -- --nocapture
+```
+
+CI 配置要求 Windows 执行 PowerShell 检查、macOS 执行 Nushell 与 Lua 检查、Linux 执行 Lua 检查；新配置的远端结果须另行核对。Lua harness 不代替原生 Clink/Cmder 的交互式 Tab 验收。记录实际执行和跳过项，不能只凭测试命令退出成功报告补全验收通过。
 
 ## 手动验收
 
@@ -130,7 +139,7 @@ env AIGATE_REQUIRE_SHELLS=1 cargo test --locked --test completions -- --nocaptur
 | `aigate-cli create --area 华` | `华东一区`、`华东二区` |
 | `aigate-cli images --image-type ` | `2`、`3` |
 | `aigate-cli list --operation-status ` | `2`、`4` |
-| `aigate-cli init ` | `bash`、`zsh`、`fish` |
+| `aigate-cli init ` | `bash`、`zsh`、`fish`、`powershell`、`clink`、`nushell` |
 | `aigate-cli workflow ` | `login`、`logout`、`run`、`status`、`upload` |
 | `aigate-cli workflow upload --media-type ` | `image`、`video`、`audio` |
 
