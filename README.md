@@ -24,7 +24,7 @@ aigate-cli list --all --json     # 获取全部分页，供脚本处理
 - **自动化输出**：提供 JSON、稳定的退出码和默认脱敏，便于脚本及 Agent 调用。
 - **Shell 集成**：支持 Bash、Zsh、Fish、PowerShell、Clink/Cmder 和 Nushell 的离线补全，由用户自行配置加载。
 
-**发行状态：**已发布 [v0.1.0-beta.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-beta.1) 和滚动更新的 [Nightly](https://github.com/davisye/aigate-cli/releases/tag/nightly)，v0.1.0 正式版尚未发布。Linux x86_64 / ARM64、macOS Apple Silicon 与 Windows x64 已通过 [原生 CI](https://github.com/davisye/aigate-cli/actions/runs/38705874649)，[Beta](https://github.com/davisye/aigate-cli/actions/runs/38706019289) 与 [Nightly](https://github.com/davisye/aigate-cli/actions/runs/38706021555) 的四目标构建和离线运行检查也已通过。Arch Linux 的本机与真实 API 验证记录、其他平台待验收的桌面凭证及真实 API 功能见 [平台支持](docs/platforms.md)。
+**发行状态：**已发布 [v0.1.0-rc.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-rc.1)、[v0.1.0-beta.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-beta.1) 和滚动更新的 [Nightly](https://github.com/davisye/aigate-cli/releases/tag/nightly)，当前正在准备 `v0.1.1-beta.1`，正式版尚未发布。既有发行的 Linux x86_64 / ARM64、macOS Apple Silicon 与 Windows x64 已通过 [原生 CI](https://github.com/davisye/aigate-cli/actions/runs/38705874649)，[Beta](https://github.com/davisye/aigate-cli/actions/runs/38706019289) 与 [Nightly](https://github.com/davisye/aigate-cli/actions/runs/38706021555) 的四目标构建和离线运行检查也已通过。Arch Linux 的本机与真实 API 验证记录、其他平台待验收的桌面凭证及真实 API 功能见 [平台支持](docs/platforms.md)。
 
 ## 快速开始
 
@@ -72,7 +72,7 @@ aigate-cli list --all --json
 
 ## 构建与运行
 
-当前源码版本为 `0.1.0-rc.1`，包含 Workflow、Comfy API 和新增 shell 补全；这些功能未包含在旧版 `v0.1.0-beta.1` 中。RC、Beta 和 Nightly 均为预发行版，开发或自行构建可从源码安装。生成 API 已完成本地 mock 验证，真实任务与上传仍待验收，详见 [验证边界](docs/development.md#生成-api-验证边界)。
+当前源码版本为 `0.1.1-beta.1`，新增 shell 初始化配置提示，包含 Workflow、Comfy API 和六种 shell 补全。本次 Beta 尚未发布，下方下载表仍指向已发布的 `v0.1.0-rc.1`；开发或验证本次改动可从源码安装。RC、Beta 和 Nightly 均为预发行版。生成 API 已完成本地 mock 验证，真实任务与上传仍待验收，详见 [验证边界](docs/development.md#生成-api-验证边界)。
 
 ### RC 预发行版
 
@@ -448,6 +448,8 @@ Workflow 查询可在专门的步骤中注入同名 repository secret（`TASK_ID
 
 用户自行将对应初始化行添加到 shell 配置，安装程序不会自动写入补全文件或修改配置。初始化与 Tab 补全均离线运行，不读取凭证或请求 API。
 
+`aigate-cli init <shell-type>` 的输出末尾附有对应 shell 的配置示例注释，可参考示例添加到配置文件。
+
 **Bash** — `~/.bashrc`：
 
 ```bash
@@ -473,7 +475,7 @@ end
 **PowerShell 7+** — 在 `$PROFILE` 中添加：
 
 ```powershell
-aigate-cli init powershell | Out-String | Invoke-Expression
+Invoke-Expression (&aigate-cli init powershell | Out-String)
 ```
 
 首次使用且配置文件不存在时，可先执行 `New-Item -ItemType File -Path $PROFILE -Force`，再编辑该文件。脚本同时注册 `aigate-cli` 和 `aigate-cli.exe` 的补全。
