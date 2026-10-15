@@ -231,7 +231,9 @@ fn clink_command(command: &Command, output: &mut String, index: &mut usize, root
     {
         for flag in flags(arg) {
             if arg.get_num_args().is_some_and(|n| n.takes_values()) {
-                let matcher = format!("clink.argmatcher():addarg({}):nofiles()", clink_values(arg));
+                // A flag-value matcher must return to its parent after one
+                // argument. Clink's :nofiles() prevents that return.
+                let matcher = format!("clink.argmatcher():addarg({})", clink_values(arg));
                 options.push(format!("{}..{matcher}", lua_string(&flag)));
                 if flag.starts_with("--") {
                     options.push(format!("{}..{matcher}", lua_string(&format!("{flag}="))));

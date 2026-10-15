@@ -30,3 +30,20 @@ contains(link(root.args[1], 'init').args[1], {'bash', 'zsh', 'fish', 'powershell
 assert(link(link(comfy.args[1], 'run').flags, '--input').args[1][1] == clink.filematches)
 assert(link(workflow.args[1], 'upload').args[1][1] == clink.filematches)
 assert(root.no_files)
+-- Clink's linking rules use :nofiles() to keep a linked parser active. A
+-- single-value flag parser must instead return to its parent so later flags
+-- and subcommands still complete (e.g. --timeout 60 comfy run --instance-).
+local function check_flag_returns(parser)
+    for _, flag in ipairs(parser.flags) do
+        if type(flag) == 'table' then
+            assert(not flag.parser.no_files, flag.name..' cannot return to its parent')
+            assert(#flag.parser.args == 1, flag.name..' must consume one value')
+        end
+    end
+    for _, choices in ipairs(parser.args) do
+        for _, choice in ipairs(choices) do
+            if type(choice) == 'table' then check_flag_returns(choice.parser) end
+        end
+    end
+end
+check_flag_returns(root)
