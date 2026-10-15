@@ -1,8 +1,12 @@
 # 更新记录
 
-尚未发布首个版本。以下内容计划随 v0.1.0 发行。
+尚未发布首个正式版本；beta 与 nightly 均为预发行版。
 
 ## [Unreleased]
+
+暂无。
+
+## [0.1.0-beta.1] - 2026-10-15
 
 ### 功能
 
@@ -23,7 +27,9 @@
 
 ### 发行范围
 
+- 新增 Linux aarch64 GNU 原生 CI、release 构建、打包及离线运行检查，nightly 与 beta 使用同一四平台构建配置。
+- 推送与 Cargo 版本一致的 `vX.Y.Z-beta.N` 标签后，全部检查通过才自动发布 beta 预发行版；提供四个平台的二进制、源码包和 SHA256 校验和。
 - 以 Cargo 作为 Windows、macOS、Linux 的主要源码构建与安装入口，保留 Linux Make 快捷入口。
 - 新增三平台原生 CI 检查和定时 / 手动 nightly 工作流：固定 prerelease 下载地址、二进制及源码包、SHA256 校验和、含日期与提交号的版本标识。
-- 首发准备提供源码包；当前原生验收范围为 Arch Linux x86_64。
+- Beta 提供 Linux x86_64 / aarch64、Windows x64、macOS Apple Silicon 预编译包与源码；完整桌面凭证库实机验收范围仍为 Arch Linux x86_64。
 - macOS、Windows 的原生 CI 已通过；桌面凭证库、真实 API 及其他系统版本仍待对应环境验收。Nightly 预编译包状态见 GitHub Releases。

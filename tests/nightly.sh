@@ -11,6 +11,7 @@ export NIGHTLY_ROLLING_ENABLED=true
 sha=0123456789abcdef0123456789abcdef01234567
 assets=(
     aigate-cli-nightly-x86_64-unknown-linux-gnu.tar.gz
+    aigate-cli-nightly-aarch64-unknown-linux-gnu.tar.gz
     aigate-cli-nightly-x86_64-pc-windows-msvc.zip
     aigate-cli-nightly-aarch64-apple-darwin.tar.gz
     aigate-cli-nightly-source.tar.gz
@@ -167,30 +168,36 @@ done
 # Exercise Unix archive layout, executable mode, metadata and extracted smoke
 # checks with a tiny binary fixture instead of a real build in tmpfs.
 fixture="$scratch/package"
-target=x86_64-unknown-linux-gnu
-mkdir -p "$fixture/target/$target/release"
-cat > "$fixture/target/$target/release/aigate-cli" <<'SH'
+mkdir -p "$fixture/target/x86_64-unknown-linux-gnu/release" "$fixture/target/aarch64-unknown-linux-gnu/release"
+cat > "$fixture/target/x86_64-unknown-linux-gnu/release/aigate-cli" <<'SH'
 #!/usr/bin/env bash
 case "$1" in
-    --version) printf 'aigate-cli 0.1.0-nightly.20261015+0123456789ab\n' ;;
+    --version) printf 'aigate-cli %s\n' "$TEST_BINARY_VERSION" ;;
     --help) printf 'Help\n' ;;
     regions) printf '[]\n' ;;
     *) exit 1 ;;
 esac
 SH
-chmod +x "$fixture/target/$target/release/aigate-cli"
+chmod +x "$fixture/target/x86_64-unknown-linux-gnu/release/aigate-cli"
+cp "$fixture/target/x86_64-unknown-linux-gnu/release/aigate-cli" "$fixture/target/aarch64-unknown-linux-gnu/release/"
 for file in LICENSE THIRD_PARTY_NOTICES.md README.md CHANGELOG.md; do
     printf 'Fixture: %s\n' "$file" > "$fixture/$file"
 done
 (
     cd "$fixture"
     unset CARGO_TARGET_DIR
-    bash "$project/scripts/package-nightly.sh" "$target" '0.1.0-nightly.20261015+0123456789ab' "$sha" > "$scratch/output"
-    mkdir extracted
-    tar -xzf "dist/aigate-cli-nightly-$target.tar.gz" -C extracted
-    test -x extracted/aigate-cli
-    test -s extracted/LICENSE
-    test -s extracted/THIRD_PARTY_NOTICES.md
-    grep -Fqx "Commit: $sha" extracted/BUILD-INFO.txt
+    for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+        for label in nightly 0.1.0-beta.1; do
+            export TEST_BINARY_VERSION=0.1.0-beta.1
+            bash "$project/scripts/package-binary.sh" "$target" "$TEST_BINARY_VERSION" "$sha" "$label" > "$scratch/output"
+            mkdir -p "extracted/$target/$label"
+            tar -xzf "dist/aigate-cli-$label-$target.tar.gz" -C "extracted/$target/$label"
+            test -x "extracted/$target/$label/aigate-cli"
+            test -s "extracted/$target/$label/LICENSE"
+            test -s "extracted/$target/$label/THIRD_PARTY_NOTICES.md"
+            grep -Fqx "Commit: $sha" "extracted/$target/$label/BUILD-INFO.txt"
+            grep -Fqx "Target: $target" "extracted/$target/$label/BUILD-INFO.txt"
+        done
+    done
 )
 printf 'Nightly packaging and publication tests passed\n'

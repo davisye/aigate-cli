@@ -57,7 +57,7 @@ cargo build --release --locked --bin aigate-cli
 
 Cargo 是三平台的主要构建入口，无需 Make。Linux 可用 `make check` 运行格式、clippy、Rust 测试、安装及发行脚本回归，`make build` 验证 release 构建。发行脚本回归另外需要 Git、jq、Bash 与 GNU tar / gzip / coreutils，在临时仓库中测试，不修改项目的 Git 历史。`bash tests/nightly.sh` 通过 mock GitHub CLI 验证首次发布、滚动更新、校验失败与恢复草稿，不调用真实 GitHub API。工具链由 `rust-toolchain.toml` 固定；更新工具链时重新运行全部检查。依赖和构建目录遵循 Cargo 默认值；需要隔离缓存时由执行环境覆盖 `CARGO_HOME`、`CARGO_TARGET_DIR`。
 
-CI 在 Ubuntu 24.04、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；Windows 不运行 Unix shell 补全测试，macOS 安装 Fish 后运行 Bash / Zsh / Fish 检查。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。原生 CI 不代替桌面凭证库和真实 API 验收。
+CI 在 Ubuntu 24.04 x86_64 / ARM64、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；Windows 不运行 Unix shell 补全测试，macOS 安装 Fish 后运行 Bash / Zsh / Fish 检查。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。原生 CI 不代替桌面凭证库和真实 API 验收。
 
 | 测试 | 维护范围 |
 | --- | --- |
@@ -118,14 +118,14 @@ env AIGATE_REQUIRE_SHELLS=1 cargo test --locked --test completions -- --nocaptur
 
 ## 发布前核对
 
-v0.1.0 的发行流程目前只生成源码包，不分发本机编译产物。后续二进制发行须按目标平台完成兼容性与凭证验收，附带完整第三方许可和校验和，要求见 [第三方说明](../THIRD_PARTY_NOTICES.md)。`publish = false` 仅控制 crates.io 发布；Cargo 仓库元数据应填写真实地址。
+Beta 与 nightly 分发四目标 CI 二进制及源码包，正式稳定版保留源码草稿流程。二进制按目标平台完成原生编译、测试、打包和离线运行检查，并附带许可与校验和；桌面凭证库和真实 API 仍需独立验收，要求见 [第三方说明](../THIRD_PARTY_NOTICES.md)。`publish = false` 仅控制 crates.io 发布；Cargo 仓库元数据应填写真实地址。
 
 ### 自动检查
 
-- `.github/workflows/ci.yml`：PR、`main` 推送及手动触发时执行 Linux 检查与 RustSec 依赖审计。Linux 检查使用 Ubuntu 24.04、固定 Rust 工具链和严格 Bash/Zsh/Fish 补全测试；配置提交不表示远端已运行通过。
+- `.github/workflows/ci.yml`：PR、`main` 推送及手动触发时执行 Linux x86_64 / ARM64、Windows、macOS 原生检查与 RustSec 依赖审计。Linux 检查使用 Ubuntu 24.04、固定 Rust 工具链和严格 Bash/Zsh/Fish 补全测试；配置提交不表示远端已运行通过。
 - `.github/workflows/security.yml`：每周及手动执行依赖审计，发现新公告时也能使检查失败。
 - `.github/dependabot.yml`：每周检查 Cargo 和 GitHub Actions 更新。
-- Actions 固定完整提交 SHA，默认 `contents: read`，checkout 不保留凭证。只有创建草稿的独立任务获得 `contents: write`，该任务不检出或执行项目代码。CI 不配置真实 `AIGATE_TOKEN`。
+- Actions 固定完整提交 SHA，默认 `contents: read`，checkout 不保留凭证。只有发行任务获得 `contents: write`，构建与测试任务保持只读。CI 不配置真实 `AIGATE_TOKEN`。
 
 2026-10-12 首次远端 [CI](https://github.com/davisye/aigate-cli/actions/runs/38239804112) 已通过：`Linux checks` 完成全部自动测试、安装回归和 release 构建，`Dependency audit` 完成锁文件审计。
 
@@ -142,13 +142,13 @@ v0.1.0 的发行流程目前只生成源码包，不分发本机编译产物。�
 
 仓库可见性或账户方案变化后，重新核对这些设置。安全报告入口见 [安全政策](../SECURITY.md)，第三方 Actions 的允许列表及合并规则应与当前工作流一致。
 
-### 准备源码发行
+### 准备正式源码发行
 
 1. 核对平台状态、许可、README 与安全政策，填入真实仓库地址。检查 `cargo package --list --allow-dirty --locked`，确保包含必要文件，排除本地配置和构建产物。
-2. 运行 `AIGATE_REQUIRE_SHELLS=1 make check`、`make build` 和 `cargo audit --file Cargo.lock`。源码安装的版本输出应为 `aigate-cli 0.1.0`。
-3. 在决定准备发行时，将 `CHANGELOG.md` 的 `Unreleased` 内容归档到 `## [0.1.0] - YYYY-MM-DD`，保留新的 `Unreleased` 节。同步文档中未发布的状态表述；日期使用实际准备日期。提交全部发行内容并合入 `main`，再为该提交创建和推送 `v0.1.0` 标签。
-4. 从 `main` 手动运行 **Prepare release**，输入 `v0.1.0`。流程验证标签与 Cargo 版本、主分支归属及已归档的发行说明，对标签对应提交重新执行 CI，然后生成源码包和 `SHA256SUMS`，最后创建 GitHub Release 草稿。已有同名 Release 会失败，不覆盖附件。
-5. 核对草稿说明、对应提交和全部附件，下载并验证校验和后，再由维护者明确发布。工作流不会自动公开发行版。
+2. 运行 `AIGATE_REQUIRE_SHELLS=1 make check`、`make build` 和 `cargo audit --file Cargo.lock`。源码安装的版本输出须与待发行的 Cargo 包版本一致。
+3. 在决定准备正式发行时，先将 Cargo 包及锁文件版本更新为 `0.1.0`，将 `CHANGELOG.md` 的 `Unreleased` 内容归档到 `## [0.1.0] - YYYY-MM-DD`，保留新的 `Unreleased` 节。同步文档中未发布的状态表述；日期使用实际准备日期。提交全部发行内容并合入 `main`，再为该提交创建和推送 `v0.1.0` 标签。
+4. 从 `main` 手动运行 **Release**，输入 `v0.1.0`。流程验证标签与 Cargo 版本、主分支归属及已归档的发行说明，对标签对应提交重新执行 CI，然后生成源码包和 `SHA256SUMS`，最后创建 GitHub Release 草稿。已有同名 Release 会失败，不覆盖附件。
+5. 核对草稿说明、对应提交和全部附件，下载并验证校验和后，再由维护者明确发布。工作流不会自动公开正式稳定版。
 
 本地可在干净且与标签一致的检出目录运行：
 
@@ -159,18 +159,27 @@ bash scripts/prepare-release.sh v0.1.0
 
 输出写入被忽略的 `dist/`，包含 `aigate-cli-0.1.0-source.tar.gz`、`SHA256SUMS`、`RELEASE_NOTES.md`。脚本不创建提交或标签，不覆盖已有产物。源码包来自 `git archive`，相同提交重复生成的压缩包一致；这不代表跨平台编译出的二进制逐字节一致。
 
+### Beta 标签发行
+
+1. 将 Cargo 包与锁文件版本更新为 `X.Y.Z-beta.N`，在 CHANGELOG 中归档同名版本说明。先通过四目标原生 CI 和依赖审计，再合入 `main`。
+2. 为通过检查的 main 提交创建并推送带版本号的标签，例如 `v0.1.0-beta.1`。标签和 Cargo 版本必须完全一致；版本号不允许前导零，只接受 `beta.N`，不接受任意后缀。
+3. 标签推送自动触发 **Release**；也可从 main 手动输入已有标签。流程检查主分支归属、版本和发行说明，重新执行 CI，再调用 `build-binaries.yml` 在四个原生 runner 构建并检查解压后的二进制。
+4. 发布 job 合并四个二进制包和源码包，生成五项 SHA256 校验和，先创建草稿并重新下载校验，完整通过后公开为 prerelease，显式设置 `latest=false`。已存在的同名 Release 不覆盖；后续修复使用新 beta 编号。
+
+Beta 附件名形如 `aigate-cli-0.1.0-beta.1-aarch64-unknown-linux-gnu.tar.gz`。包内 `BUILD-INFO.txt` 包含版本、完整提交和目标；CLI 输出 `aigate-cli 0.1.0-beta.1`。Beta 与 nightly 的原生打包配置共享，后者使用固定 `nightly` 附件名。
+
 ### Nightly 自动发行
 
-`.github/workflows/nightly.yml` 每天 UTC 19:23（北京时间次日 03:23）调度，也支持手动触发。仅在上游仓库 `main` 上运行，固定本次事件的完整提交 SHA，再对该提交运行 CI 和三平台原生 release 构建。定时运行遇到已发布的相同提交时跳过；手动运行始终重建。Nightly 使用仓库固定的 Rust 工具链，名称不表示使用 Rust nightly 编译器。
+`.github/workflows/nightly.yml` 每天 UTC 19:23（北京时间次日 03:23）调度，也支持手动触发。仅在上游仓库 `main` 上运行，固定本次事件的完整提交 SHA，再对该提交运行 CI 和四目标原生 release 构建。定时运行遇到已发布的相同提交时跳过；手动运行始终重建。Nightly 使用仓库固定的 Rust 工具链，名称不表示使用 Rust nightly 编译器。
 
 维护者首次启用时：
 
 1. 确认接受滚动发行的覆盖语义，并在仓库 Settings 中关闭 immutable releases，再创建 Actions repository variable `NIGHTLY_ROLLING_ENABLED`，值为 `true`。变量表示维护者已核对设置；未启用变量时发布脚本直接失败，已存在的不可变 nightly 也会被拒绝。设置查询 API 需要管理员权限，内置 `GITHUB_TOKEN` 不能读取，因而工作流不查询或自行修改该设置，也不需要管理员 Token。不要在保持不可变设置开启时启用此变量，否则首次发布的 nightly 会被锁定。
 2. 将工作流与脚本合入 `main`。Actions 使用现有 SHA 固定的官方 checkout / artifact Actions；只有发布 job 申请 `contents: write`，使用内置 `GITHUB_TOKEN`，无需添加 PAT 或 AIGate Token。
-3. 在 **Actions → Nightly → Run workflow** 选择 `main` 手动运行，检查三平台测试、打包与离线运行结果。首次远端运行通过前，不将 macOS / Windows 状态标记为已验证。
+3. 在 **Actions → Nightly → Run workflow** 选择 `main` 手动运行，检查四目标测试、打包与离线运行结果。首次远端运行通过前，不将 macOS / Windows 状态标记为已验证。
 4. 下载 nightly 附件并核对校验和、`--version` 和包内 `BUILD-INFO.txt`；桌面凭证库与真实 API 仍按平台验收步骤单独验证。
 
-产物包括 Linux x86_64 GNU、Windows x64 MSVC、macOS Apple Silicon 二进制包、准确提交的源码包和 `SHA256SUMS`。附件名固定，下载入口见 [README](../README.md#nightly-预编译版本)。Nightly 的 `--version` 形如 `aigate-cli 0.1.0-nightly.YYYYMMDD+COMMIT`，由构建环境的 `AIGATE_BUILD_VERSION` 嵌入；普通 Cargo 安装仍显示包版本。
+产物包括 Linux x86_64 / aarch64 GNU、Windows x64 MSVC、macOS Apple Silicon 二进制包、准确提交的源码包和 `SHA256SUMS`。附件名固定，下载入口见 [README](../README.md#nightly-预编译版本)。Nightly 的 `--version` 形如 `aigate-cli 0.1.0-nightly.YYYYMMDD+COMMIT`，由构建环境的 `AIGATE_BUILD_VERSION` 嵌入；普通 Cargo 安装仍显示包版本。
 
 `scripts/publish-nightly.sh` 先校验本地产物，再上传到临时草稿并重新下载校验。全部完成后才删除旧 nightly Release（保留标签）、将 `nightly` 标签移动到本次提交，并把准备好的草稿发布为固定 `nightly` prerelease，显式设置 `latest=false`。普通 CI、构建或上传校验失败不会替换旧 nightly。
 

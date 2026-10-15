@@ -1,10 +1,12 @@
-name: Prepare release
+name: Release
 
 on:
+  push:
+    tags: ['v*-beta.*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag, for example v0.1.0
+        description: Existing release tag, for example v0.1.0 or v0.1.0-beta.1
         required: true
         type: string
 
@@ -12,29 +14,38 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'davisye/aigate-cli' && (github.event_name == 'push' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       sha: ${{ steps.tag.outputs.sha }}
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      beta: ${{ steps.tag.outputs.beta }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
           fetch-depth: 0
           persist-credentials: false
       - name: Validate tag, version and source tree
         id: tag
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           bash scripts/prepare-release.sh --check "$RELEASE_TAG"
           printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          printf 'tag=%s\nversion=%s\n' "$RELEASE_TAG" "${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+          if [[ $RELEASE_TAG == *-beta.* ]]; then
+            printf 'beta=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'beta=false\n' >> "$GITHUB_OUTPUT"
+          fi
 
   checks:
     needs: validate
@@ -54,7 +65,7 @@ jobs:
           persist-credentials: false
       - name: Prepare source archive and release notes
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
         run: bash scripts/prepare-release.sh "$RELEASE_TAG"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -65,6 +76,7 @@ jobs:
 
   draft:
     needs: [validate, package]
+    if: needs.validate.outputs.beta != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -78,7 +90,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
           RELEASE_SHA: ${{ needs.validate.outputs.sha }}
         run: |
           cd dist
@@ -87,3 +99,60 @@ jobs:
           gh release create "$RELEASE_TAG" --verify-tag --draft \
             --title "AIGate CLI $RELEASE_TAG" --notes-file RELEASE_NOTES.md \
             "aigate-cli-${RELEASE_TAG#v}-source.tar.gz" SHA256SUMS
+
+  binaries:
+    needs: [validate, checks]
+    if: needs.validate.outputs.beta == 'true'
+    uses: ./.github/workflows/build-binaries.yml
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+      version: ${{ needs.validate.outputs.version }}
+      archive_label: ${{ needs.validate.outputs.version }}
+
+  beta:
+    needs: [validate, package, binaries]
+    if: needs.validate.outputs.beta == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-source
+          path: dist/
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: ${{ needs.validate.outputs.version }}-*
+          merge-multiple: true
+          path: dist/
+      - name: Verify and publish the tagged beta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          cd dist
+          assets=(
+            "aigate-cli-$RELEASE_VERSION-x86_64-unknown-linux-gnu.tar.gz"
+            "aigate-cli-$RELEASE_VERSION-aarch64-unknown-linux-gnu.tar.gz"
+            "aigate-cli-$RELEASE_VERSION-x86_64-pc-windows-msvc.zip"
+            "aigate-cli-$RELEASE_VERSION-aarch64-apple-darwin.tar.gz"
+            "aigate-cli-$RELEASE_VERSION-source.tar.gz"
+          )
+          for file in "${assets[@]}"; do test -s "$file"; done
+          sha256sum "${assets[@]}" > SHA256SUMS
+          sha256sum --strict --check SHA256SUMS
+          printf '\nCommit: %s\n\n[构建记录](https://github.com/%s/actions/runs/%s)\n' \
+            "$RELEASE_SHA" "$GH_REPO" "$GITHUB_RUN_ID" >> RELEASE_NOTES.md
+          test "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" = "$RELEASE_SHA"
+          gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --latest=false \
+            --title "AIGate CLI $RELEASE_TAG" --notes-file RELEASE_NOTES.md \
+            "${assets[@]}" SHA256SUMS
+          gh release download "$RELEASE_TAG" --dir ../verified
+          cmp SHA256SUMS ../verified/SHA256SUMS
+          (cd ../verified && sha256sum --strict --check SHA256SUMS)
+          test "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" = "$RELEASE_SHA"
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
