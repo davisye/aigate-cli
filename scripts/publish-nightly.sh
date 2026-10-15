@@ -55,6 +55,7 @@ sha=$1
 cd -- "$2"
 assets=(
     aigate-cli-nightly-x86_64-unknown-linux-gnu.tar.gz
+    aigate-cli-nightly-aarch64-unknown-linux-gnu.tar.gz
     aigate-cli-nightly-x86_64-pc-windows-msvc.zip
     aigate-cli-nightly-aarch64-apple-darwin.tar.gz
     aigate-cli-nightly-source.tar.gz
@@ -62,7 +63,7 @@ assets=(
 for file in "${assets[@]}" SHA256SUMS RELEASE_NOTES.md; do
     [[ -s $file ]] || die "missing release output: $file"
 done
-[[ $(wc -l < SHA256SUMS) == "${#assets[@]}" ]] || die 'expected exactly four archive checksums'
+[[ $(wc -l < SHA256SUMS) == "${#assets[@]}" ]] || die 'expected exactly five archive checksums'
 for file in "${assets[@]}"; do
     grep -Eq "^[0-9a-f]{64}  $file$" SHA256SUMS || die "missing checksum for $file"
 done

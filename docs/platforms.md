@@ -8,13 +8,14 @@
 | --- | --- | --- |
 | Arch Linux x86_64，GNU 环境 | 已验证：Rust 1.97.1、自动测试、安装回归、release 构建及 GNOME Keyring；真实 API 验证边界见 [开发文档](development.md#已知行为与验证边界) | Secret Service |
 | Ubuntu 24.04 x86_64 | CI 已验证：固定工具链、自动测试、安装回归、Bash/Zsh/Fish 补全及 release 构建；桌面凭证库与真实 API 待验证 | Secret Service |
+| Ubuntu 24.04 aarch64（ARM64） | 使用 ARM64 原生 runner 执行格式、clippy、mock、shell 补全及 release 打包检查；结果见 [beta 发行记录](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-beta.1)；桌面凭证库与真实 API 待验证 | Secret Service |
 | macOS Apple Silicon | 原生 CI 已验证：固定工具链、格式、clippy、本地 mock 与 shell 补全测试；桌面凭证库和真实 API 待验证 | Keychain |
 | Windows x64 MSVC | 原生 CI 已验证：固定工具链、格式、clippy、本地 mock 测试；桌面凭证库和真实 API 待验证 | Credential Manager |
 | Intel Mac、其他架构、musl | 尚未验证，按需求补充 | 以对应目标实际后端为准 |
 
 配置见 [Cargo.toml](../Cargo.toml)，后端映射见 [keyring 文档](https://docs.rs/keyring/3.6.3/keyring/)。当前最低 Rust 版本未验证，因此未声明 `rust-version`。
 
-仓库 CI 包含 Ubuntu 24.04 x86_64、Windows 2025 x64 和 macOS 15 Apple Silicon，使用 `rust-toolchain.toml` 固定的工具链。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。2026-10-12 首次远端 [Linux checks](https://github.com/davisye/aigate-cli/actions/runs/38239804112/job/114779334603) 已通过。CI 的本地 mock 测试不包含桌面凭证库和真实云资源验收，不能据此将其他平台标记为全部通过。
+仓库 CI 包含 Ubuntu 24.04 x86_64 / ARM64、Windows 2025 x64 和 macOS 15 Apple Silicon，使用 `rust-toolchain.toml` 固定的工具链。2026-10-15 首次三平台 [原生检查](https://github.com/davisye/aigate-cli/actions/runs/38699756721) 均通过；同次依赖审计发现 rustls 安全通告，另以补丁升级修复。2026-10-12 首次远端 [Linux checks](https://github.com/davisye/aigate-cli/actions/runs/38239804112/job/114779334603) 已通过。CI 的本地 mock 测试不包含桌面凭证库和真实云资源验收，不能据此将其他平台标记为全部通过。
 
 ## 构建与终端差异
 
@@ -43,11 +44,12 @@ Linux/macOS 可用 `env -u AIGATE_TOKEN aigate-cli ...` 排除当前命令的环
 
 发布产物按操作系统与架构区分。Linux 需注明并测试发行版与 glibc 基线，Arch 构建不代表兼容所有 Linux。musl 或静态构建须单独验证凭证后端与 D-Bus；发布检查见 [开发文档](development.md#发布前核对)。
 
-当前 v0.1.0 正式版仅准备源码发行，不上传本机 Arch 编译产物。独立的 nightly 工作流执行以下原生构建与离线运行检查；实际产物及对应提交见 [nightly 发行记录](https://github.com/davisye/aigate-cli/releases/tag/nightly)：
+Beta 与 nightly 共用四平台原生构建与离线运行检查，分发 CI 产物。实际产物与对应提交见 [beta 发行记录](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-beta.1) 和 [nightly 发行记录](https://github.com/davisye/aigate-cli/releases/tag/nightly)：
 
 | 目标 | Runner / 构建基线 | 打包与运行检查 |
 | --- | --- | --- |
 | `x86_64-unknown-linux-gnu` | Ubuntu 24.04，glibc 2.39 | tar.gz；原生与解压后的 `--version`，原生 `--help` / `regions --json`；需要 D-Bus 运行时库 |
+| `aarch64-unknown-linux-gnu` | Ubuntu 24.04 ARM64，glibc 2.39 | tar.gz；在 ARM64 原生 runner 执行编译及解压后的版本检查；需要 D-Bus 运行时库 |
 | `x86_64-pc-windows-msvc` | Windows 2025 x64，MSVC | ZIP；原生与解压后的 `--version`，原生 `--help` / `regions --json` |
 | `aarch64-apple-darwin` | macOS 15 Apple Silicon | tar.gz；原生与解压后的 `--version`，原生 `--help` / `regions --json` |
 
