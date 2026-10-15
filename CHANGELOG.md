@@ -22,5 +22,7 @@
 
 ### 发行范围
 
+- 以 Cargo 作为 Windows、macOS、Linux 的主要源码构建与安装入口，保留 Linux Make 快捷入口。
+- 新增三平台原生 CI 检查和定时 / 手动 nightly 工作流：固定 prerelease 下载地址、二进制及源码包、SHA256 校验和、含日期与提交号的版本标识；配置启用与远端验证仍待完成。
 - 首发准备提供源码包；当前原生验收范围为 Arch Linux x86_64。
-- macOS、Windows 及其他 Linux 发行版仍待对应环境验收，尚未提供预编译二进制。
+- macOS、Windows 及其他 Linux 发行版仍待对应环境验收，尚未公开发布预编译二进制。

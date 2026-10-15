@@ -48,10 +48,45 @@ jobs:
         run: rustup show active-toolchain
       - name: Check, test and build
         run: |
-          make check
-          make build
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --all-targets
+          sh tests/makefile.sh
+          bash tests/release.sh
+          bash tests/nightly.sh
+          cargo build --release --locked --bin aigate-cli
           target/release/aigate-cli --version
           cargo package --list --locked
+
+  native:
+    name: ${{ matrix.name }} checks
+    if: ${{ !inputs.audit_only }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-2025
+          - name: macOS
+            os: macos-15
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Install macOS shell dependencies
+        if: runner.os == 'macOS'
+        run: brew install fish
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Run native tests
+        run: cargo test --locked --all-targets
 
   dependencies:
     name: Dependency audit
