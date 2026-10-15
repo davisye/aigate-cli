@@ -8,8 +8,13 @@ use serde_json::{json, Value};
 use std::io::{self, IsTerminal, Write};
 use std::time::Duration;
 
+const BUILD_VERSION: &str = match option_env!("AIGATE_BUILD_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 #[derive(Parser)]
-#[command(version, about = "云扉 AIGate 资源与实例管理工具")]
+#[command(version = BUILD_VERSION, about = "云扉 AIGate 资源与实例管理工具")]
 struct Cli {
     /// 输出 JSON（仅 data，不含 API envelope；提示写入 stderr）
     #[arg(long, global = true)]

@@ -4,7 +4,7 @@
 
 AIGate CLI 面向个人账户，基于云扉 OpenAPI 提供资源查询、实例创建、开关机与释放，支持系统凭证存储、JSON 输出和 shell 自动补全。
 
-[快速开始](#快速开始) · [安装与构建](#构建与运行) · [命令指南](#命令指南) · [CI 与自动化](#ci-与自动化) · [自动补全](#shell-自动补全) · [Agent 使用](#agent-使用) · [文档](#文档与开发) · [TODO](#todo)
+[快速开始](#快速开始) · [安装与构建](#构建与运行) · [Nightly 下载](#nightly-预编译版本) · [命令指南](#命令指南) · [CI 与自动化](#ci-与自动化) · [自动补全](#shell-自动补全) · [Agent 使用](#agent-使用) · [文档](#文档与开发) · [TODO](#todo)
 
 ## 特性
 
@@ -25,11 +25,11 @@ AIGate CLI 面向个人账户，基于云扉 OpenAPI 提供资源查询、实例
 ```bash
 git clone https://github.com/davisye/aigate-cli.git
 cd aigate-cli
-make install
+cargo install --path . --locked
 aigate-cli --version
 ```
 
-默认安装到当前用户的 `~/.local/bin`，无需 `sudo`。PATH 配置和其他安装方式见下文。
+Cargo 默认安装到当前用户的 `~/.cargo/bin`（Windows 为 `%USERPROFILE%\.cargo\bin`），无需管理员权限；原生 PowerShell 也使用上述 Cargo 命令。PATH 配置和其他安装方式见下文。
 
 ### 2. 登录
 
@@ -56,7 +56,24 @@ aigate-cli list --all --json
 
 需要 Rustup；仓库通过 `rust-toolchain.toml` 固定 Rust 1.97.1，Rustup 会在需要时安装该工具链。最低 Rust 版本尚未验证。Linux 源码构建需要 `pkg-config` 和 D-Bus 开发文件，Keyring 需要可用的 Secret Service（例如 GNOME Keyring）。使用 Makefile 还需要 GNU Make 和 GNU `install`。其他平台要求见 [平台说明](docs/platforms.md#构建与终端差异)。
 
-v0.1.0 正在准备，计划先提供源码包。尚未提供预编译二进制；Workflow API 和 Comfy API 的后续计划见 [TODO](#todo)。
+v0.1.0 正在准备，正式版本计划先提供源码包。Nightly 工作流另行构建三平台预编译包，首次发布及启用条件见下文。Workflow API 和 Comfy API 的后续计划见 [TODO](#todo)。
+
+### Nightly 预编译版本
+
+Nightly 配置合入 `main`、维护者完成 [发行设置](docs/development.md#nightly-自动发行)，且工作流首次成功后，可从固定的 [nightly 预发行版](https://github.com/davisye/aigate-cli/releases/tag/nightly) 下载，无需安装 Rust 或 Make：
+
+| 平台 | 固定下载地址 |
+| --- | --- |
+| Windows x64（MSVC） | [ZIP](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-x86_64-pc-windows-msvc.zip) |
+| Linux x86_64（Ubuntu 24.04 构建基线） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-x86_64-unknown-linux-gnu.tar.gz) |
+| macOS Apple Silicon（macOS 15 构建基线） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-aarch64-apple-darwin.tar.gz) |
+| 校验和 | [SHA256SUMS](https://github.com/davisye/aigate-cli/releases/download/nightly/SHA256SUMS) |
+
+Windows 解压 ZIP，在 PowerShell 中先运行 `./aigate-cli.exe --version`，再将程序所在目录加入用户 PATH。可用 `Get-FileHash ./aigate-cli-nightly-x86_64-pc-windows-msvc.zip -Algorithm SHA256` 与同次下载的 `SHA256SUMS` 比较。
+
+Linux / macOS 解压后运行 `./aigate-cli --version`，再放入 PATH 中的用户目录。Linux 需要运行时 D-Bus 库（Ubuntu 包名 `libdbus-1-3`）；桌面登录仍需 Secret Service。包内含许可、文档与 `BUILD-INFO.txt`。二进制未签名或公证；平台功能验收边界见 [平台说明](docs/platforms.md)。
+
+固定链接会随成功构建更新；`--version` 显示基础版本、nightly UTC 日期及提交号。Nightly 标记为 prerelease，不作为正式版 Latest。每天北京时间 03:23 调度，未变化的提交跳过发布；GitHub 调度可能延迟，手动运行可重新构建同一提交。
 
 ### 源码安装
 
@@ -64,9 +81,9 @@ v0.1.0 正在准备，计划先提供源码包。尚未提供预编译二进制�
 
 | 方式 | 命令 | 默认安装位置 |
 | --- | --- | --- |
+| Cargo 安装（各平台首选） | `cargo install --path . --locked` | 用户 Cargo 目录下的 `bin` |
 | Linux 个人安装 | `make install` | `~/.local/bin/aigate-cli` |
 | Linux 全局安装 | `sudo make install` | `/usr/local/bin/aigate-cli` |
-| Cargo 安装 | `cargo install --path . --locked` | 用户 Cargo 目录下的 `bin` |
 
 Make 安装会先编译 release 版本。通过 sudo 执行时，构建阶段使用原登录用户的 Rust 工具链，安装阶段由 root 写入目标目录。安装后以普通用户运行 CLI，访问该用户自己的 Keyring。
 
@@ -330,7 +347,7 @@ end
 | [安全政策](SECURITY.md) | 安全问题的私密报告方式 |
 | [更新记录](CHANGELOG.md) | 未发布变化与发行记录 |
 
-Linux 使用 `make check` 运行格式、clippy、Rust 测试、安装及发行脚本回归；测试还需 Git、jq，完整补全检查需 Bash、Zsh、Fish。其他平台的 Cargo 检查见开发文档。自动测试使用本地 HTTP mock 和占位凭证，不操作真实云资源。
+各平台以 Cargo 运行格式、clippy 和 Rust 测试，命令见开发文档。Linux 另可用 `make check` 一并运行安装及发行脚本回归；脚本测试还需 Git、jq，完整补全检查需 Bash、Zsh、Fish。CI 配置包含 Linux、Windows 和 macOS 原生检查；已执行的平台验收记录见平台说明。自动测试使用本地 HTTP mock 和占位凭证，不操作真实云资源。
 
 ## TODO
 
