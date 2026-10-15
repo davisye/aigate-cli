@@ -69,6 +69,8 @@ jobs:
             os: windows-2025
           - name: macOS
             os: macos-15
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     steps:
@@ -76,6 +78,11 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
+      - name: Install ARM64 Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish
       - name: Install macOS shell dependencies
         if: runner.os == 'macOS'
         run: brew install fish

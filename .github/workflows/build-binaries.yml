@@ -1,0 +1,94 @@
+name: Build binaries
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact commit to build
+        required: true
+        type: string
+      version:
+        description: Version embedded in the binary
+        required: true
+        type: string
+      archive_label:
+        description: Archive label (nightly or the package version)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+            rustflags: -C target-feature=+crt-static
+          - os: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    env:
+      AIGATE_BUILD_VERSION: ${{ inputs.version }}
+      RELEASE_SHA: ${{ inputs.ref }}
+      BUILD_TARGET: ${{ matrix.target }}
+      ARCHIVE_LABEL: ${{ inputs.archive_label }}
+      RUSTFLAGS: ${{ matrix.rustflags || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y pkg-config libdbus-1-dev
+      - name: Install the pinned Rust toolchain and target
+        run: rustup target add ${{ matrix.target }}
+      - name: Build native release binary
+        run: cargo build --release --locked --bin aigate-cli --target ${{ matrix.target }}
+      - name: Package and smoke test Unix binary
+        if: runner.os != 'Windows'
+        run: bash scripts/package-binary.sh "$BUILD_TARGET" "$AIGATE_BUILD_VERSION" "$RELEASE_SHA" "$ARCHIVE_LABEL"
+      - name: Package and smoke test Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = "target/$env:BUILD_TARGET/release/aigate-cli.exe"
+          $version = & $binary --version
+          if ($LASTEXITCODE -ne 0 -or $version -ne "aigate-cli $env:AIGATE_BUILD_VERSION") {
+            throw "Unexpected binary version: $version"
+          }
+          & $binary --help
+          if ($LASTEXITCODE -ne 0) { throw 'Help smoke test failed' }
+          & $binary regions --json
+          if ($LASTEXITCODE -ne 0) { throw 'Offline smoke test failed' }
+          New-Item -ItemType Directory -Path dist, staging | Out-Null
+          Copy-Item $binary staging/
+          Copy-Item LICENSE, THIRD_PARTY_NOTICES.md, README.md, CHANGELOG.md staging/
+          @("Version: $env:AIGATE_BUILD_VERSION", "Commit: $env:RELEASE_SHA", "Target: $env:BUILD_TARGET") |
+            Set-Content -Encoding utf8 staging/BUILD-INFO.txt
+          Compress-Archive -Path staging/* -DestinationPath "dist/aigate-cli-$env:ARCHIVE_LABEL-$env:BUILD_TARGET.zip"
+          Expand-Archive -Path "dist/aigate-cli-$env:ARCHIVE_LABEL-$env:BUILD_TARGET.zip" -DestinationPath unpacked
+          $version = & ./unpacked/aigate-cli.exe --version
+          if ($LASTEXITCODE -ne 0 -or $version -ne "aigate-cli $env:AIGATE_BUILD_VERSION") {
+            throw 'Packaged binary smoke test failed'
+          }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.archive_label }}-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7

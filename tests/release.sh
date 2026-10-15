@@ -102,6 +102,26 @@ git commit --quiet -m 'test(release): remove finalized notes'
 git tag --force v0.1.0 >/dev/null
 reject --check v0.1.0
 
+# Beta releases must match the package version and have finalized notes too.
+sed -i 's/version = "0.1.0"/version = "0.1.0-beta.1"/' Cargo.toml
+printf '# Changes\n\n## [Unreleased]\n\n## [0.1.0-beta.1]\n\n- Initial beta release.\n' > CHANGELOG.md
+cargo generate-lockfile --offline --quiet
+git add Cargo.toml Cargo.lock CHANGELOG.md
+git commit --quiet -m 'test(release): prepare beta fixture'
+git tag v0.1.0-beta.1
+prepare --check v0.1.0-beta.1
+for tag in v0.1.0-beta v0.1.0-beta.01 v0.1.0-rc.1 v0.1.0-beta.2; do
+    git tag "$tag"
+    reject --check "$tag"
+done
+rm -rf dist
+prepare v0.1.0-beta.1
+(cd dist && sha256sum --check SHA256SUMS)
+tar -tzf dist/aigate-cli-0.1.0-beta.1-source.tar.gz > "$scratch/archive-files"
+grep -Fqx 'aigate-cli-0.1.0-beta.1/Cargo.lock' "$scratch/archive-files"
+grep -Fq 'Initial beta release' dist/RELEASE_NOTES.md
+grep -Fq 'Linux x86_64 / aarch64' dist/RELEASE_NOTES.md
+
 # Even a clean, tagged checkout must belong to main.
 git checkout --quiet --orphan unrelated
 git commit --quiet -m 'test(release): create unrelated history'

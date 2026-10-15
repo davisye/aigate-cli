@@ -57,7 +57,21 @@ aigate-cli list --all --json
 
 需要 Rustup；仓库通过 `rust-toolchain.toml` 固定 Rust 1.97.1，Rustup 会在需要时安装该工具链。最低 Rust 版本尚未验证。Linux 源码构建需要 `pkg-config` 和 D-Bus 开发文件，Keyring 需要可用的 Secret Service（例如 GNOME Keyring）。使用 Makefile 还需要 GNU Make 和 GNU `install`。其他平台要求见 [平台说明](docs/platforms.md#构建与终端差异)。
 
-v0.1.0 正在准备，正式版本计划先提供源码包。Nightly 工作流另行构建三平台预编译包，首次发布及启用条件见下文。生成 API 已完成本地 mock 验证，真实任务与上传仍待验收，详见 [开发文档](docs/development.md#生成-api-验证边界)。
+本次预发行版本为 `v0.1.0-beta.1`，正式版 `v0.1.0` 尚未发布。Beta 与 nightly 提供四个平台的预编译包。本地功能分支中的生成 API 已完成 mock 验证，尚未纳入本次 beta；真实任务与上传仍待验收，详见 [开发文档](docs/development.md#生成-api-验证边界)。
+
+### Beta 预发行版
+
+对应 tag 的全部测试、审计和打包检查通过后，可从 [v0.1.0-beta.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.0-beta.1) 下载带版本号的附件：
+
+| 平台 | 下载 |
+| --- | --- |
+| Linux aarch64（ARM64） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.0-beta.1/aigate-cli-0.1.0-beta.1-aarch64-unknown-linux-gnu.tar.gz) |
+| Linux x86_64 | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.0-beta.1/aigate-cli-0.1.0-beta.1-x86_64-unknown-linux-gnu.tar.gz) |
+| Windows x64 | [ZIP](https://github.com/davisye/aigate-cli/releases/download/v0.1.0-beta.1/aigate-cli-0.1.0-beta.1-x86_64-pc-windows-msvc.zip) |
+| macOS Apple Silicon | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.0-beta.1/aigate-cli-0.1.0-beta.1-aarch64-apple-darwin.tar.gz) |
+| 校验和 | [SHA256SUMS](https://github.com/davisye/aigate-cli/releases/download/v0.1.0-beta.1/SHA256SUMS) |
+
+解压后使用 `./aigate-cli --version`（Windows 为 `./aigate-cli.exe --version`）核对 `0.1.0-beta.1`。运行依赖、PATH 与校验方法见下文，平台基线见 [平台说明](docs/platforms.md)。Beta 标签和附件不覆盖更新；后续修复发布新的 beta 编号。
 
 ### Nightly 预编译版本
 
@@ -67,6 +81,7 @@ Nightly 配置合入 `main`、维护者完成 [发行设置](docs/development.md
 | --- | --- |
 | Windows x64（MSVC） | [ZIP](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-x86_64-pc-windows-msvc.zip) |
 | Linux x86_64（Ubuntu 24.04 构建基线） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-x86_64-unknown-linux-gnu.tar.gz) |
+| Linux aarch64（Ubuntu 24.04 ARM64 构建基线） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-aarch64-unknown-linux-gnu.tar.gz) |
 | macOS Apple Silicon（macOS 15 构建基线） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/nightly/aigate-cli-nightly-aarch64-apple-darwin.tar.gz) |
 | 校验和 | [SHA256SUMS](https://github.com/davisye/aigate-cli/releases/download/nightly/SHA256SUMS) |
 
