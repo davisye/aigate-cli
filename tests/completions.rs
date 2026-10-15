@@ -205,9 +205,12 @@ fn run_script(shell: &str, args: &[&str], extension: &str, input: &str) -> Outpu
         file.write_all(b"\xef\xbb\xbf").unwrap();
     }
     file.write_all(input.as_bytes()).unwrap();
+    // Close the handle before PowerShell opens the script on Windows. Keep
+    // the path guard alive so the file is still cleaned up after execution.
+    let path = file.into_temp_path();
     let output = Command::new(shell)
         .args(args)
-        .arg(file.path())
+        .arg(&path)
         .env("AIGATE_TOKEN", "")
         .env("AIGATE_WORKFLOW_TOKEN", "")
         .stdin(Stdio::null())
