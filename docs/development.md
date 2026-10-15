@@ -94,7 +94,9 @@ cargo test --locked --all-targets
 cargo build --release --locked --bin aigate-cli
 ```
 
-Linux 可用 `make check` 运行格式、clippy、Rust 测试、安装及发行脚本回归，`make build` 验证 release 构建。发行脚本回归另外需要 Git、jq、Bash 与 GNU tar / gzip / coreutils，在临时仓库中测试，不修改项目的 Git 历史。工具链由 `rust-toolchain.toml` 固定；更新工具链时重新运行全部检查。依赖和构建目录遵循 Cargo 默认值；需要隔离缓存时由执行环境覆盖 `CARGO_HOME`、`CARGO_TARGET_DIR`。
+Cargo 是三平台的主要构建入口，无需 Make。Linux 可用 `make check` 运行格式、clippy、Rust 测试、安装及发行脚本回归，`make build` 验证 release 构建。发行脚本回归另外需要 Git、jq、Bash 与 GNU tar / gzip / coreutils，在临时仓库中测试，不修改项目的 Git 历史。`bash tests/nightly.sh` 通过 mock GitHub CLI 验证首次发布、滚动更新、校验失败与恢复草稿，不调用真实 GitHub API。工具链由 `rust-toolchain.toml` 固定；更新工具链时重新运行全部检查。依赖和构建目录遵循 Cargo 默认值；需要隔离缓存时由执行环境覆盖 `CARGO_HOME`、`CARGO_TARGET_DIR`。
+
+CI 配置在 Ubuntu 24.04、Windows 2025 x64、macOS 15 Apple Silicon 上运行 Cargo 格式检查、clippy 和本地 mock 测试。安装及发行脚本回归仅在 Linux 执行；Windows 不运行 Unix shell 补全测试，macOS 安装 Fish 后运行 Bash / Zsh / Fish 检查。新增工作流尚需远端运行，配置本身不代表平台验收通过。
 
 | 测试 | 维护范围 |
 | --- | --- |
@@ -177,7 +179,7 @@ v0.1.0 的发行流程目前只生成源码包，不分发本机编译产物。�
 1. 默认分支为 `main`。保护主分支：要求 PR 和成功的 `Linux checks`、`Dependency audit` 检查，禁止强推与删除。先运行 CI，再从实际检查记录中选择；单人维护可不要求其他人的审批。
 2. Actions 默认工作流权限为读取；限制可使用的 Actions，并启用完整 SHA 固定策略。使用 GitHub 托管 runner。
 3. 启用 Dependabot alerts 和安全更新。按仓库类型与账户方案核对 secret scanning、push protection 和 Private vulnerability reporting 的可用性；凭证扫描不能保证识别云扉自定义 Token。
-4. 启用 immutable releases。公开发布前上传齐全附件；发布后修复产物使用新版本。
+4. 采用固定滚动 `nightly` 时，仓库必须关闭 immutable releases；此设置作用于整个仓库，新正式发行版也不会获得该项保护。若希望启用 immutable releases，应改用每次唯一的 nightly 标签。正式发行仍不覆盖既有版本，公开发布前上传齐全附件，发布后修复产物使用新版本。
 
 设置依据：[分支保护](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)、[Actions 安全](https://docs.github.com/en/actions/reference/security/secure-use)、[仓库安全](https://docs.github.com/en/repositories/creating-and-managing-repositories/best-practices-for-repositories)、[不可变发行版](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)。
 
@@ -199,3 +201,20 @@ bash scripts/prepare-release.sh v0.1.0
 ```
 
 输出写入被忽略的 `dist/`，包含 `aigate-cli-0.1.0-source.tar.gz`、`SHA256SUMS`、`RELEASE_NOTES.md`。脚本不创建提交或标签，不覆盖已有产物。源码包来自 `git archive`，相同提交重复生成的压缩包一致；这不代表跨平台编译出的二进制逐字节一致。
+
+### Nightly 自动发行
+
+`.github/workflows/nightly.yml` 每天 UTC 19:23（北京时间次日 03:23）调度，也支持手动触发。仅在上游仓库 `main` 上运行，固定本次事件的完整提交 SHA，再对该提交运行 CI 和三平台原生 release 构建。定时运行遇到已发布的相同提交时跳过；手动运行始终重建。Nightly 使用仓库固定的 Rust 工具链，名称不表示使用 Rust nightly 编译器。
+
+维护者首次启用时：
+
+1. 确认接受滚动发行的覆盖语义，并在仓库 Settings 中关闭 immutable releases，再创建 Actions repository variable `NIGHTLY_ROLLING_ENABLED`，值为 `true`。变量表示维护者已核对设置；未启用变量时发布脚本直接失败，已存在的不可变 nightly 也会被拒绝。设置查询 API 需要管理员权限，内置 `GITHUB_TOKEN` 不能读取，因而工作流不查询或自行修改该设置，也不需要管理员 Token。不要在保持不可变设置开启时启用此变量，否则首次发布的 nightly 会被锁定。
+2. 将工作流与脚本合入 `main`。Actions 使用现有 SHA 固定的官方 checkout / artifact Actions；只有发布 job 申请 `contents: write`，使用内置 `GITHUB_TOKEN`，无需添加 PAT 或 AIGate Token。
+3. 在 **Actions → Nightly → Run workflow** 选择 `main` 手动运行，检查三平台测试、打包与离线运行结果。首次远端运行通过前，不将 macOS / Windows 状态标记为已验证。
+4. 下载 nightly 附件并核对校验和、`--version` 和包内 `BUILD-INFO.txt`；桌面凭证库与真实 API 仍按平台验收步骤单独验证。
+
+产物包括 Linux x86_64 GNU、Windows x64 MSVC、macOS Apple Silicon 二进制包、准确提交的源码包和 `SHA256SUMS`。附件名固定，下载入口见 [README](../README.md#nightly-预编译版本)。Nightly 的 `--version` 形如 `aigate-cli 0.1.0-nightly.YYYYMMDD+COMMIT`，由构建环境的 `AIGATE_BUILD_VERSION` 嵌入；普通 Cargo 安装仍显示包版本。
+
+`scripts/publish-nightly.sh` 先校验本地产物，再上传到临时草稿并重新下载校验。全部完成后才删除旧 nightly Release（保留标签）、将 `nightly` 标签移动到本次提交，并把准备好的草稿发布为固定 `nightly` prerelease，显式设置 `latest=false`。普通 CI、构建或上传校验失败不会替换旧 nightly。
+
+GitHub 不提供 Release 原子替换，最终切换阶段固定链接可能短暂不可用。若最终标签更新或发布失败，脚本保留已上传的草稿并输出其名称；维护者检查后重新运行 Nightly，成功后清理遗留的 `nightly-staging-*` 草稿。不要以同名稳定发行版或不可变发行版占用 `nightly`，脚本会拒绝替换。下载正好跨越更新时，校验不一致应重新下载包和校验和。

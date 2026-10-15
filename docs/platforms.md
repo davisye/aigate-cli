@@ -14,7 +14,7 @@
 
 配置见 [Cargo.toml](../Cargo.toml)，后端映射见 [keyring 文档](https://docs.rs/keyring/3.6.3/keyring/)。当前最低 Rust 版本未验证，因此未声明 `rust-version`。
 
-仓库 CI 使用 Ubuntu 24.04 x86_64 和 `rust-toolchain.toml` 固定的工具链；2026-10-12 首次远端 [Linux checks](https://github.com/davisye/aigate-cli/actions/runs/38239804112/job/114779334603) 已通过。CI 的本地 mock 测试不包含桌面凭证库和真实云资源验收，不能据此将其他平台标记为全部通过。
+仓库 CI 配置包含 Ubuntu 24.04 x86_64、Windows 2025 x64 和 macOS 15 Apple Silicon，使用 `rust-toolchain.toml` 固定的工具链；新增 Windows / macOS 检查尚待远端运行。2026-10-12 首次远端 [Linux checks](https://github.com/davisye/aigate-cli/actions/runs/38239804112/job/114779334603) 已通过。CI 的本地 mock 测试不包含桌面凭证库和真实云资源验收，不能据此将其他平台标记为全部通过。
 
 ## 构建与终端差异
 
@@ -43,4 +43,12 @@ Linux/macOS 可用 `env -u AIGATE_TOKEN aigate-cli ...` 排除算力 / Comfy 的
 
 发布产物按操作系统与架构区分。Linux 需注明并测试发行版与 glibc 基线，Arch 构建不代表兼容所有 Linux。musl 或静态构建须单独验证凭证后端与 D-Bus；发布检查见 [开发文档](development.md#发布前核对)。
 
-当前 v0.1.0 仅准备源码发行，不上传本机 Arch 编译产物。后续增加预编译二进制时，再补齐对应平台的构建基线、运行验收和第三方许可附件。
+当前 v0.1.0 正式版仅准备源码发行，不上传本机 Arch 编译产物。独立的 nightly 工作流配置以下原生构建；首次远端构建与运行尚待验证：
+
+| 目标 | Runner / 构建基线 | 打包与运行检查 |
+| --- | --- | --- |
+| `x86_64-unknown-linux-gnu` | Ubuntu 24.04，glibc 2.39 | tar.gz；原生与解压后的 `--version`，原生 `--help` / `regions --json`；需要 D-Bus 运行时库 |
+| `x86_64-pc-windows-msvc` | Windows 2025 x64，MSVC | ZIP；原生与解压后的 `--version`，原生 `--help` / `regions --json` |
+| `aarch64-apple-darwin` | macOS 15 Apple Silicon | tar.gz；原生与解压后的 `--version`，原生 `--help` / `regions --json` |
+
+未声明兼容更早的 glibc、macOS 或 Windows 版本；需在目标系统补充验收。二进制未代码签名或 Apple 公证。各包附带 `LICENSE`、`THIRD_PARTY_NOTICES.md`、README、CHANGELOG 与构建版本 / 提交 / 目标信息。Nightly 的下载与仓库设置见 [README](../README.md#nightly-预编译版本) 和 [开发文档](development.md#nightly-自动发行)。
