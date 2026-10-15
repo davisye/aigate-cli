@@ -102,7 +102,7 @@ git commit --quiet -m 'test(release): remove finalized notes'
 git tag --force v0.1.0 >/dev/null
 reject --check v0.1.0
 
-# Beta releases must match the package version and have finalized notes too.
+# Prereleases must match the package version and have finalized notes too.
 sed -i 's/version = "0.1.0"/version = "0.1.0-beta.1"/' Cargo.toml
 printf '# Changes\n\n## [Unreleased]\n\n## [0.1.0-beta.1]\n\n- Initial beta release.\n' > CHANGELOG.md
 cargo generate-lockfile --offline --quiet
@@ -110,7 +110,7 @@ git add Cargo.toml Cargo.lock CHANGELOG.md
 git commit --quiet -m 'test(release): prepare beta fixture'
 git tag v0.1.0-beta.1
 prepare --check v0.1.0-beta.1
-for tag in v0.1.0-beta v0.1.0-beta.01 v0.1.0-rc.1 v0.1.0-beta.2; do
+for tag in v0.1.0-beta v0.1.0-beta.01 v0.1.0-rc.1 v0.1.0-beta.2 v0.1.0-dev.1 v0.1.0-alpha.01; do
     git tag "$tag"
     reject --check "$tag"
 done
@@ -145,6 +145,20 @@ if grep -Fq '尚未提供预编译二进制' dist/RELEASE_NOTES.md; then
     printf 'RC incorrectly used stable source-only notes\n' >&2
     exit 1
 fi
+
+# Alpha tags also use the binary prerelease path.
+version='0.1.0-alpha.1'
+sed -i "s/version = \"0.1.0-[^\"]*\"/version = \"$version\"/" Cargo.toml
+printf '# Changes\n\n## [Unreleased]\n\n## [%s]\n\n- Alpha release fixture.\n' "$version" > CHANGELOG.md
+cargo generate-lockfile --offline --quiet
+git add Cargo.toml Cargo.lock CHANGELOG.md
+git commit --quiet -m 'test(release): prepare alpha fixture'
+git tag --force "v$version" >/dev/null
+prepare --check "v$version"
+rm -rf dist
+prepare "v$version"
+(cd dist && sha256sum --check SHA256SUMS)
+grep -Fq 'alpha 预发行版' dist/RELEASE_NOTES.md
 
 # Even a clean, tagged checkout must belong to main.
 git checkout --quiet --orphan unrelated

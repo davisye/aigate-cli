@@ -45,7 +45,7 @@ jobs:
       - name: Install native and shell dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish lua5.4
+          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish lua5.4 gnupg
       - name: Install the pinned Rust toolchain
         run: rustup show active-toolchain
       - name: Check, test and build
@@ -55,6 +55,7 @@ jobs:
           cargo test --locked --all-targets
           sh tests/makefile.sh
           bash tests/release.sh
+          bash tests/release-signing.sh
           bash tests/nightly.sh
           cargo build --release --locked --bin aigate-cli
           target/release/aigate-cli --version

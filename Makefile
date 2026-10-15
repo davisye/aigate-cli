@@ -90,6 +90,7 @@ test-install:
 
 test-release:
 	bash tests/release.sh
+	bash tests/release-signing.sh
 	bash tests/nightly.sh
 
 check:

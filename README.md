@@ -106,6 +106,8 @@ aigate-cli list --all --json
 
 以下以 RC 为例。使用 Nightly 时，将文件名替换为上表中对应目标的 Nightly 文件名，并使用同次 Nightly 下载的 `SHA256SUMS`。
 
+后续版本化发行若附带 `SHA256SUMS.asc` 和 `aigate-cli-release-key.asc`，请先按 [GPG 签名验证](docs/release-signing.md#下载者验证) 核对公钥指纹并验证签名，再校验下载包的哈希。已发布的 `v0.1.0-beta.1` 和滚动 nightly 不会由此自动补签。
+
 **Linux x86_64**：在下载目录执行以下命令。Ubuntu 24.04 需要运行时 D-Bus 库 `libdbus-1-3`；桌面登录还需可用的 Secret Service（例如 GNOME Keyring）。
 
 ```bash
