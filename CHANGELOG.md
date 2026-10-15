@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [0.1.1-beta.1] - 2026-10-15
+
+### 功能
+
+- `init <shell-type>` 输出末尾新增对应 shell 的配置文件位置与初始化示例注释，覆盖 Bash、Zsh、Fish、PowerShell、Clink/Cmder 与 Nushell。
+- PowerShell 配置示例使用 `Invoke-Expression (&aigate-cli init powershell | Out-String)`，合并多行初始化脚本后执行。
+
+### 发行范围
+
+- 版本化发行新增 GPG 校验和签名与公开密钥附件，发布前重新下载并验证签名及文件哈希；沿用四平台原生 CI、打包与预发行流程。
+- 生成 API 的真实账户任务与上传、Clink 的 Windows 交互式 Tab 仍待验收。
+
 ## [0.1.0-rc.1] - 2026-10-15
 
 ### 功能

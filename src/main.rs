@@ -110,9 +110,29 @@ enum Command {
 
 fn init_shell(shell: CompletionShell) -> Result<()> {
     let script = completions::generate(Cli::command(), shell)?;
+    let profile_hint = match shell {
+        CompletionShell::Bash => {
+            "# Add to ~/.bashrc:\n#eval \"$(aigate-cli init bash)\""
+        }
+        CompletionShell::Zsh => {
+            "# Add to ~/.zshrc after compinit:\n#eval \"$(aigate-cli init zsh)\""
+        }
+        CompletionShell::Fish => {
+            "# Add to ~/.config/fish/config.fish:\n#if status is-interactive\n#    aigate-cli init fish | source\n#end"
+        }
+        CompletionShell::PowerShell => {
+            "# Add to $PROFILE:\n#Invoke-Expression (&aigate-cli init powershell | Out-String)"
+        }
+        CompletionShell::Clink => {
+            "-- Generate aigate-cli.lua in the script directory shown by clink info, for example:\n--aigate-cli init clink > \"%LOCALAPPDATA%\\clink\\aigate-cli.lua\"\n-- For Cmder:\n--aigate-cli init cmder > \"%CMDER_ROOT%\\config\\aigate-cli.lua\""
+        }
+        CompletionShell::Nushell => {
+            "# First generate the completion file:\n#aigate-cli init nushell | save --force ($nu.default-config-dir | path join \"aigate-cli.nu\")\n# Then add to $nu.config-path:\n#source ($nu.default-config-dir | path join \"aigate-cli.nu\")"
+        }
+    };
     io::stdout()
         .lock()
-        .write_all(script.as_bytes())
+        .write_all(format!("{script}\n{profile_hint}\n").as_bytes())
         .context("无法输出 shell 初始化脚本")
 }
 
