@@ -6,7 +6,7 @@ target=$1
 version=$2
 sha=$3
 archive_label=${4:-nightly}
-[[ $archive_label == nightly || ( $archive_label == "$version" && $archive_label =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ) ]] || { printf 'Invalid archive label\n' >&2; exit 1; }
+[[ $archive_label == nightly || ( $archive_label == "$version" && $archive_label =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(beta|rc)\.(0|[1-9][0-9]*))?$ ) ]] || { printf 'Invalid archive label\n' >&2; exit 1; }
 case "$target" in
     x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu|aarch64-apple-darwin) ;;
     *) printf 'Unsupported Unix target: %s\n' "$target" >&2; exit 1 ;;

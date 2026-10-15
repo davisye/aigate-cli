@@ -122,6 +122,30 @@ grep -Fqx 'aigate-cli-0.1.0-beta.1/Cargo.lock' "$scratch/archive-files"
 grep -Fq 'Initial beta release' dist/RELEASE_NOTES.md
 grep -Fq 'Linux x86_64 / aarch64' dist/RELEASE_NOTES.md
 
+# RC tags follow the same verified binary prerelease path as beta tags.
+sed -i 's/version = "0.1.0-beta.1"/version = "0.1.0-rc.1"/' Cargo.toml
+printf '# Changes\n\n## [Unreleased]\n\n## [0.1.0-rc.1]\n\n- Initial release candidate.\n' > CHANGELOG.md
+cargo generate-lockfile --offline --quiet
+git add Cargo.toml Cargo.lock CHANGELOG.md
+git commit --quiet -m 'test(release): prepare RC fixture'
+git tag --force v0.1.0-rc.1 >/dev/null
+prepare --check v0.1.0-rc.1
+for tag in v0.1.0-rc v0.1.0-rc.01 v0.1.0-rc.1.1 v0.1.0-rc.2 v0.1.0-alpha.1; do
+    git tag "$tag"
+    reject --check "$tag"
+done
+rm -rf dist
+prepare v0.1.0-rc.1
+(cd dist && sha256sum --check SHA256SUMS)
+tar -tzf dist/aigate-cli-0.1.0-rc.1-source.tar.gz > "$scratch/archive-files"
+grep -Fqx 'aigate-cli-0.1.0-rc.1/Cargo.lock' "$scratch/archive-files"
+grep -Fq 'Initial release candidate' dist/RELEASE_NOTES.md
+grep -Fq 'Linux x86_64 / aarch64' dist/RELEASE_NOTES.md
+if grep -Fq '尚未提供预编译二进制' dist/RELEASE_NOTES.md; then
+    printf 'RC incorrectly used stable source-only notes\n' >&2
+    exit 1
+fi
+
 # Even a clean, tagged checkout must belong to main.
 git checkout --quiet --orphan unrelated
 git commit --quiet -m 'test(release): create unrelated history'

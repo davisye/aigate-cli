@@ -170,7 +170,7 @@ CI 配置要求 Windows 执行 PowerShell 检查、macOS 执行 Nushell 与 Lua 
 
 ## 发布前核对
 
-Beta 与 nightly 分发四目标 CI 二进制及源码包，正式稳定版保留源码草稿流程。二进制按目标平台完成原生编译、测试、打包和离线运行检查，并附带许可与校验和；桌面凭证库和真实 API 仍需独立验收，要求见 [第三方说明](../THIRD_PARTY_NOTICES.md)。`publish = false` 仅控制 crates.io 发布；Cargo 仓库元数据应填写真实地址。
+Beta、RC 与 nightly 分发四目标 CI 二进制及源码包，正式稳定版保留源码草稿流程。二进制按目标平台完成原生编译、测试、打包和离线运行检查，并附带许可与校验和；桌面凭证库和真实 API 仍需独立验收，要求见 [第三方说明](../THIRD_PARTY_NOTICES.md)。`publish = false` 仅控制 crates.io 发布；Cargo 仓库元数据应填写真实地址。
 
 ### 自动检查
 
@@ -211,14 +211,14 @@ bash scripts/prepare-release.sh v0.1.0
 
 输出写入被忽略的 `dist/`，包含 `aigate-cli-0.1.0-source.tar.gz`、`SHA256SUMS`、`RELEASE_NOTES.md`。脚本不创建提交或标签，不覆盖已有产物。源码包来自 `git archive`，相同提交重复生成的压缩包一致；这不代表跨平台编译出的二进制逐字节一致。
 
-### Beta 标签发行
+### Beta / RC 标签发行
 
-1. 将 Cargo 包与锁文件版本更新为 `X.Y.Z-beta.N`，在 CHANGELOG 中归档同名版本说明。先通过四目标原生 CI 和依赖审计，再合入 `main`。
-2. 为通过检查的 main 提交创建并推送带版本号的标签，例如 `v0.1.0-beta.1`。标签和 Cargo 版本必须完全一致；版本号不允许前导零，只接受 `beta.N`，不接受任意后缀。
+1. 将 Cargo 包与锁文件版本更新为 `X.Y.Z-beta.N` 或 `X.Y.Z-rc.N`，在 CHANGELOG 中归档同名版本说明。先通过四目标原生 CI 和依赖审计，再合入 `main`。
+2. 为通过检查的 main 提交创建并推送带版本号的标签，例如 `v0.1.0-rc.1`。标签和 Cargo 版本必须完全一致；版本号不允许前导零，只接受 `beta.N`、`rc.N`，不接受任意后缀。
 3. 标签推送自动触发 **Release**；也可从 main 手动输入已有标签。流程检查主分支归属、版本和发行说明，重新执行 CI，再调用 `build-binaries.yml` 在四个原生 runner 构建并检查解压后的二进制。
-4. 发布 job 合并四个二进制包和源码包，生成五项 SHA256 校验和，先创建草稿并重新下载校验，完整通过后公开为 prerelease，显式设置 `latest=false`。已存在的同名 Release 不覆盖；后续修复使用新 beta 编号。
+4. 发布 job 合并四个二进制包和源码包，生成五项 SHA256 校验和，先创建草稿并重新下载校验，完整通过后公开为 prerelease，显式设置 `latest=false`。已存在的同名 Release 不覆盖；后续修复使用新 beta 或 RC 编号。
 
-Beta 附件名形如 `aigate-cli-0.1.0-beta.1-aarch64-unknown-linux-gnu.tar.gz`。包内 `BUILD-INFO.txt` 包含版本、完整提交和目标；CLI 输出 `aigate-cli 0.1.0-beta.1`。Beta 与 nightly 的原生打包配置共享，后者使用固定 `nightly` 附件名。
+RC 附件名形如 `aigate-cli-0.1.0-rc.1-aarch64-unknown-linux-gnu.tar.gz`。包内 `BUILD-INFO.txt` 包含版本、完整提交和目标；CLI 输出 `aigate-cli 0.1.0-rc.1`。Beta、RC 与 nightly 的原生打包配置共享，后者使用固定 `nightly` 附件名。
 
 ### Nightly 自动发行
 
