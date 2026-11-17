@@ -102,6 +102,54 @@ jobs:
       - name: Run native tests
         run: cargo test --locked --all-targets
 
+  powershell-version-comparison:
+    name: PowerShell ${{ matrix.version }} ARM64 trial ${{ matrix.trial }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['7.6.9', '7.6.10']
+        trial: [1, 2, 3, 4]
+    env:
+      AIGATE_REQUIRE_SHELLS: '1'
+      AIGATE_REQUIRE_POWERSHELL: '1'
+      AIGATE_REQUIRE_LUA: '1'
+      PWSH_VERSION: ${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install ARM64 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config zsh fish lua5.4
+      - name: Install official PowerShell release
+        run: |
+          case "$PWSH_VERSION" in
+            7.6.9) expected=02eb9991af447c7e7fe881acde195961afd397c40b8eb1c2b3856b84ec2d85f2 ;;
+            7.6.10) expected=439432cdecf4418413b9a8f547e3ab4d9b40e8e4258913ec3d15fc92c67a9235 ;;
+            *) exit 1 ;;
+          esac
+          archive="$RUNNER_TEMP/powershell-$PWSH_VERSION-linux-arm64.tar.gz"
+          curl --fail --location --retry 3 "https://github.com/PowerShell/PowerShell/releases/download/v$PWSH_VERSION/powershell-$PWSH_VERSION-linux-arm64.tar.gz" --output "$archive"
+          echo "$expected  $archive" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/pwsh"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/pwsh"
+          chmod +x "$RUNNER_TEMP/pwsh/pwsh"
+          echo "$RUNNER_TEMP/pwsh" >> "$GITHUB_PATH"
+      - name: Identify environment
+        run: |
+          command -v pwsh
+          pwsh --version
+          rustup show active-toolchain
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Run native tests once
+        run: cargo test --locked --all-targets
+
   dependencies:
     name: Dependency audit
     runs-on: ubuntu-24.04
