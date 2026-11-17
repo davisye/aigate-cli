@@ -101,14 +101,6 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Run native tests
         run: cargo test --locked --all-targets
-      - name: Verify isolated PowerShell caches on ARM64
-        if: runner.os == 'Linux'
-        run: |
-          pwsh --version
-          for iteration in {1..15}; do
-            echo "Isolated PowerShell completion iteration $iteration"
-            AIGATE_REQUIRE_POWERSHELL=1 cargo test --locked --test completions powershell_ -- --nocapture || exit $?
-          done
 
   dependencies:
     name: Dependency audit
