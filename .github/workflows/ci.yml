@@ -99,6 +99,27 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Lint
         run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Investigate ARM64 full completion suite
+        if: runner.os == 'Linux'
+        run: |
+          export DOTNET_DbgEnableMiniDump=1
+          export DOTNET_DbgMiniDumpType=2
+          export DOTNET_DbgMiniDumpName=/tmp/aigate-pwsh-%p.dmp
+          ulimit -c unlimited
+          cat /proc/sys/kernel/core_pattern
+          command -v gdb || true
+          for iteration in {1..20}; do
+            echo "Full completion suite iteration $iteration"
+            if ! AIGATE_REQUIRE_POWERSHELL=1 cargo test --locked --test completions -- --nocapture; then
+              ls -lh /tmp/aigate-pwsh-*.dmp core* 2>/dev/null || true
+              for dump in /tmp/aigate-pwsh-*.dmp core*; do
+                if [ -f "$dump" ] && command -v gdb; then
+                  gdb -q -batch -ex 'thread apply all bt' "$(command -v pwsh)" "$dump" || true
+                fi
+              done
+              exit 1
+            fi
+          done
       - name: Run native tests
         run: cargo test --locked --all-targets
 
