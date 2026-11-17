@@ -1,6 +1,21 @@
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 
+fn shell_command(shell: &str) -> (Command, Option<tempfile::TempDir>) {
+    let mut command = Command::new(shell);
+    // Concurrent PowerShell processes can corrupt their shared startup profile.
+    // Keep each Unix process's cache alive until that process exits.
+    // https://github.com/PowerShell/PowerShell/issues/26528
+    let cache = if cfg!(unix) && shell == "pwsh" {
+        let cache = tempfile::tempdir().unwrap();
+        command.env("XDG_CACHE_HOME", cache.path());
+        Some(cache)
+    } else {
+        None
+    };
+    (command, cache)
+}
+
 fn script(shell: &str) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_aigate-cli"))
         .args(["--base-url", "invalid-origin", "init", shell])
@@ -25,7 +40,8 @@ fn available(shell: &str) -> bool {
         _ => "AIGATE_REQUIRE_SHELLS",
     };
     let version = if shell == "lua" { "-v" } else { "--version" };
-    let reason = match Command::new(shell).arg(version).output() {
+    let (mut command, _cache) = shell_command(shell);
+    let reason = match command.arg(version).output() {
         Ok(output) if output.status.success() => {
             if shell == "pwsh" {
                 eprintln!(
@@ -216,7 +232,8 @@ fn run_script(shell: &str, args: &[&str], extension: &str, input: &str) -> Outpu
     // Close the handle before PowerShell opens the script on Windows. Keep
     // the path guard alive so the file is still cleaned up after execution.
     let path = file.into_temp_path();
-    let output = Command::new(shell)
+    let (mut command, _cache) = shell_command(shell);
+    let output = command
         .args(args)
         .arg(&path)
         .env("AIGATE_TOKEN", "")
