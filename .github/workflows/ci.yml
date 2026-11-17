@@ -99,6 +99,14 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Lint
         run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Diagnose ARM64 PowerShell completion
+        if: runner.os == 'Linux'
+        run: |
+          pwsh --version
+          for iteration in {1..10}; do
+            echo "PowerShell completion iteration $iteration"
+            AIGATE_REQUIRE_POWERSHELL=1 cargo test --locked --test completions powershell_ -- --nocapture || exit $?
+          done
       - name: Run native tests
         run: cargo test --locked --all-targets
 

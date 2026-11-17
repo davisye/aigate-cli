@@ -218,7 +218,9 @@ fn run_script(shell: &str, args: &[&str], extension: &str, input: &str) -> Outpu
         .unwrap();
     assert!(
         output.status.success(),
-        "{shell}: {}",
+        "{shell} exited with {}\nstdout: {}\nstderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(
@@ -268,6 +270,7 @@ fn powershell_loads_init_and_completes_nested_commands_options_and_values() {
             vec!["bash", "zsh", "fish", "powershell", "clink", "nushell"],
         ),
     ] {
+        eprintln!("PowerShell completion case: {line:?}");
         let line = line.replace('\'', "''");
         let input = format!("$ErrorActionPreference = 'Stop'\n{init}\n$line = '{line}'\n[System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null).CompletionMatches | ForEach-Object {{ $_.CompletionText }}\n");
         let output = run_script(
