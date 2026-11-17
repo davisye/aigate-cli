@@ -218,7 +218,7 @@ fn run_script(shell: &str, args: &[&str], extension: &str, input: &str) -> Outpu
         .unwrap();
     assert!(
         output.status.success(),
-        "{shell} exited with {}\nstdout: {}\nstderr: {}",
+        "{shell} exited with {}\nstdout: {:?}\nstderr: {:?}",
         output.status,
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
