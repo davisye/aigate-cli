@@ -26,7 +26,15 @@ fn available(shell: &str) -> bool {
     };
     let version = if shell == "lua" { "-v" } else { "--version" };
     let reason = match Command::new(shell).arg(version).output() {
-        Ok(output) if output.status.success() => return true,
+        Ok(output) if output.status.success() => {
+            if shell == "pwsh" {
+                eprintln!(
+                    "{shell} version: {}",
+                    String::from_utf8_lossy(&output.stdout).trim()
+                );
+            }
+            return true;
+        }
         Ok(output) => format!("--version exited with {}", output.status),
         Err(error) => error.to_string(),
     };
