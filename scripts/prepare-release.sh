@@ -57,10 +57,10 @@ done
     printf '%s\n\n' "$notes"
     if [[ $version == *-* ]]; then
         channel=${version#*-}
-        printf '%s 预发行版：提供 Linux x86_64 / aarch64、Windows x64、macOS Apple Silicon 二进制与源码包。\n' "${channel%%.*}"
-        printf 'Linux 基线为 Ubuntu 24.04 / glibc 2.39，需要 D-Bus 运行时库；macOS 基线为 15。尚未进行 Windows Authenticode 签名或 macOS 代码签名/公证，桌面凭证库及真实 API 仍需实机验收。\n'
+        printf '%s 预发行版提供 Linux x86_64 / aarch64、Windows x64、macOS Apple Silicon 二进制与源码包。\n' "${channel%%.*}"
     else
-        printf '本次提供源码包，安装步骤见 README。尚未提供预编译二进制；平台验收状态见 docs/platforms.md。\n'
+        printf '正式版提供 Linux x86_64 / aarch64、Windows x64、macOS Apple Silicon 二进制与源码包。\n'
     fi
+    printf 'Linux 基线为 Ubuntu 24.04 / glibc 2.39，需要 D-Bus 运行时库。macOS 基线为 15。桌面凭证库及真实 API 的实机验收范围见 docs/platforms.md。\n'
 } > dist/RELEASE_NOTES.md
 printf 'Prepared source release in dist/ for %s (%s)\n' "$tag" "$commit"

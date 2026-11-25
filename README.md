@@ -24,7 +24,7 @@ aigate-cli list --all --json     # 获取全部分页，供脚本处理
 - **自动化输出**：提供 JSON、稳定的退出码和默认脱敏，便于脚本及 Agent 调用。
 - **Shell 集成**：支持 Bash、Zsh、Fish、PowerShell、Clink/Cmder 和 Nushell 的离线补全，由用户自行配置加载。
 
-**发行状态。** 首个正式版尚未发布。当前候选版为 [v0.1.1-rc.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.1-rc.1)，另有 [Beta](https://github.com/davisye/aigate-cli/releases/tag/v0.1.1-beta.1) 和滚动更新的 [Nightly](https://github.com/davisye/aigate-cli/releases/tag/nightly)。Linux x86_64 / ARM64、macOS Apple Silicon 与 Windows x64 的下载见下方发行说明。Arch Linux 的本机与真实 API 验证记录、其他平台的验收范围见 [平台支持](docs/platforms.md)。
+首个正式版 `v0.1.1` 提供 Linux x86_64 / ARM64、macOS Apple Silicon 和 Windows x64 预编译包，以及 Linux 原生安装包。 [正式版下载](https://github.com/davisye/aigate-cli/releases/tag/v0.1.1) · [平台支持](docs/platforms.md)
 
 ## 快速开始
 
@@ -32,7 +32,7 @@ aigate-cli list --all --json     # 获取全部分页，供脚本处理
 
 ### 1. 安装并检查
 
-从 [RC 下载表](#rc-预发行版) 选择对应平台的压缩包，按 [校验与安装](#预编译包校验与安装) 完成安装；无需安装 Rust。也可选择滚动更新的 [Nightly](#nightly-预编译版本)，或使用 [源码安装](#源码安装)。
+Linux 用户可用发行版的包管理器安装。各平台也可以下载压缩包，校验后解压运行。 [Linux 安装包](#linux-安装包) · [正式版压缩包](#正式版) · [源码安装](#源码安装)
 
 ```bash
 aigate-cli --version
@@ -72,21 +72,21 @@ aigate-cli list --all --json
 
 ## 构建与运行
 
-当前源码版本为 `0.1.1-rc.1`，包含 Workflow、Comfy API、六种 shell 补全与初始化配置提示。相较于 `0.1.1-beta.1`，本次 RC 更新了 TLS 与运行时依赖。生成 API 已完成本地 mock 验证，真实任务与上传仍待验收。 [验证边界](docs/development.md#生成-api-验证边界)
+当前源码版本为 `0.1.1`，包含 Workflow、Comfy API、六种 shell 补全与初始化配置提示。生成 API 已完成本地 mock 验证，真实任务与上传仍待验收。 [验证边界](docs/development.md#生成-api-验证边界)
 
-### RC 预发行版
+### 正式版
 
-候选版的二进制包、源码包和签名校验文件来自同一次构建。 [v0.1.1-rc.1 发行页](https://github.com/davisye/aigate-cli/releases/tag/v0.1.1-rc.1) · [源码包](https://github.com/davisye/aigate-cli/releases/download/v0.1.1-rc.1/aigate-cli-0.1.1-rc.1-source.tar.gz)
+二进制压缩包、Linux 安装包和源码包共用同次发行的签名校验清单。 [v0.1.1 发行页](https://github.com/davisye/aigate-cli/releases/tag/v0.1.1) · [源码包](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-source.tar.gz)
 
 | 平台 | 下载 |
 | --- | --- |
-| Linux aarch64（ARM64） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.1-rc.1/aigate-cli-0.1.1-rc.1-aarch64-unknown-linux-gnu.tar.gz) |
-| Linux x86_64 | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.1-rc.1/aigate-cli-0.1.1-rc.1-x86_64-unknown-linux-gnu.tar.gz) |
-| Windows x64 | [ZIP](https://github.com/davisye/aigate-cli/releases/download/v0.1.1-rc.1/aigate-cli-0.1.1-rc.1-x86_64-pc-windows-msvc.zip) |
-| macOS Apple Silicon | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.1-rc.1/aigate-cli-0.1.1-rc.1-aarch64-apple-darwin.tar.gz) |
-| 校验文件 | [SHA256SUMS](https://github.com/davisye/aigate-cli/releases/download/v0.1.1-rc.1/SHA256SUMS) · [GPG 签名](https://github.com/davisye/aigate-cli/releases/download/v0.1.1-rc.1/SHA256SUMS.asc) · [公钥](https://github.com/davisye/aigate-cli/releases/download/v0.1.1-rc.1/aigate-cli-release-key.asc) |
+| Linux aarch64（ARM64） | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-aarch64-unknown-linux-gnu.tar.gz) |
+| Linux x86_64 | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-x86_64-unknown-linux-gnu.tar.gz) |
+| Windows x64 | [ZIP](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-x86_64-pc-windows-msvc.zip) |
+| macOS Apple Silicon | [tar.gz](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-aarch64-apple-darwin.tar.gz) |
+| 校验文件 | [SHA256SUMS](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/SHA256SUMS) · [GPG 签名](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/SHA256SUMS.asc) · [公钥](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-release-key.asc) |
 
-解压后使用 `./aigate-cli --version`（Windows 为 `./aigate-cli.exe --version`）核对 `0.1.1-rc.1`。运行依赖、PATH 与校验方法见 [预编译包校验与安装](#预编译包校验与安装)，平台基线见 [平台说明](docs/platforms.md)。后续修复使用新的 RC 编号。
+解压后使用 `./aigate-cli --version`（Windows 为 `./aigate-cli.exe --version`）核对 `0.1.1`。 [预编译包校验与安装](#预编译包校验与安装)
 
 ### Nightly 预编译版本
 
@@ -104,9 +104,9 @@ aigate-cli list --all --json
 
 ### 预编译包校验与安装
 
-以下以 RC 为例。使用 Nightly 时，将文件名替换为上表中对应目标的 Nightly 文件名，并使用同次 Nightly 下载的 `SHA256SUMS`。
+以下以正式版为例。使用 Nightly 时，将文件名替换为上表中对应目标的 Nightly 文件名，并使用同次 Nightly 下载的 `SHA256SUMS`。
 
-下载 RC 后，先用同次发行的 `SHA256SUMS.asc` 和 `aigate-cli-release-key.asc` 核对公钥指纹并验证签名，再校验下载包的哈希。 [GPG 签名验证](docs/release-signing.md#下载者验证)
+下载正式版后，先用同次发行的 `SHA256SUMS.asc` 和 `aigate-cli-release-key.asc` 核对公钥指纹并验证签名，再校验下载包的哈希。 [GPG 签名验证](docs/release-signing.md#下载者验证)
 
 **Linux x86_64**：在下载目录执行以下命令。Ubuntu 24.04 需要运行时 D-Bus 库 `libdbus-1-3`；桌面登录还需可用的 Secret Service（例如 GNOME Keyring）。
 
@@ -117,19 +117,39 @@ sha256sum --check --ignore-missing SHA256SUMS
 确认校验输出为 `OK` 后，再执行解压和安装。`--ignore-missing` 跳过未下载的其他平台包：
 
 ```bash
-tar -xzf aigate-cli-0.1.1-rc.1-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf aigate-cli-0.1.1-x86_64-unknown-linux-gnu.tar.gz
 ./aigate-cli --version
 mkdir -p "$HOME/.local/bin"
 install -m755 ./aigate-cli "$HOME/.local/bin/aigate-cli"
 ```
 
-Linux ARM64 将解压文件名换为 `aigate-cli-0.1.1-rc.1-aarch64-unknown-linux-gnu.tar.gz`，其他步骤相同。安装目录须加入 PATH，方法见 [源码安装](#源码安装)。Linux 包基于 Ubuntu 24.04 / glibc 2.39 构建，未声明兼容更早的 glibc。
+Linux ARM64 将解压文件名换为 `aigate-cli-0.1.1-aarch64-unknown-linux-gnu.tar.gz`，其他步骤相同。安装目录须加入 PATH，方法见 [源码安装](#源码安装)。Linux 包基于 Ubuntu 24.04 / glibc 2.39 构建，未声明兼容更早的 glibc。
 
-**macOS Apple Silicon** 使用 `shasum -a 256 aigate-cli-0.1.1-rc.1-aarch64-apple-darwin.tar.gz` 计算下载包的校验和，并与 `SHA256SUMS` 中对应文件的值比较。解压后先运行 `./aigate-cli --version`，再将程序放入 PATH 中的用户目录。构建基线为 macOS 15。
+**macOS Apple Silicon** 使用 `shasum -a 256 aigate-cli-0.1.1-aarch64-apple-darwin.tar.gz` 计算下载包的校验和，并与 `SHA256SUMS` 中对应文件的值比较。解压后先运行 `./aigate-cli --version`，再将程序放入 PATH 中的用户目录。构建基线为 macOS 15。
 
-**Windows x64** 使用 `Get-FileHash ./aigate-cli-0.1.1-rc.1-x86_64-pc-windows-msvc.zip -Algorithm SHA256` 计算校验和，并与 `SHA256SUMS` 比较。解压 ZIP 后在 PowerShell 运行 `./aigate-cli.exe --version`，再将程序所在目录加入用户 PATH。
+**Windows x64** 使用 `Get-FileHash ./aigate-cli-0.1.1-x86_64-pc-windows-msvc.zip -Algorithm SHA256` 计算校验和，并与 `SHA256SUMS` 比较。解压 ZIP 后在 PowerShell 运行 `./aigate-cli.exe --version`，再将程序所在目录加入用户 PATH。
 
 各二进制压缩包包含许可、文档与 `BUILD-INFO.txt`，可核对版本、提交和目标平台。二进制未签名或公证；平台功能验收边界见 [平台说明](docs/platforms.md)。
+
+### Linux 安装包
+
+选择与发行版和 CPU 架构匹配的包。安装前先验证签名和 SHA256 校验和。 [验签步骤](docs/release-signing.md#下载者验证)
+
+| 系统 | x86_64 | ARM64 |
+| --- | --- | --- |
+| Debian、Ubuntu | [amd64 DEB](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-amd64.deb) | [arm64 DEB](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-arm64.deb) |
+| Fedora 等 RPM 系发行版 | [x86_64 RPM](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-x86_64.rpm) | [aarch64 RPM](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-aarch64.rpm) |
+| Arch Linux / Arch Linux ARM | [x86_64 pkg.tar.zst](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-x86_64.pkg.tar.zst) | [aarch64 pkg.tar.zst](https://github.com/davisye/aigate-cli/releases/download/v0.1.1/aigate-cli-0.1.1-aarch64.pkg.tar.zst) |
+
+在下载目录中执行对应发行版的命令。ARM64 用户使用上表对应的文件名。
+
+```sh
+sudo apt install ./aigate-cli-0.1.1-amd64.deb        # Debian、Ubuntu
+sudo dnf install ./aigate-cli-0.1.1-x86_64.rpm       # Fedora
+sudo pacman -U ./aigate-cli-0.1.1-x86_64.pkg.tar.zst # Arch Linux
+```
+
+用 `/usr/bin/aigate-cli --version` 核对安装。卸载时分别使用 `sudo apt remove aigate-cli`、`sudo dnf remove aigate-cli` 或 `sudo pacman -R aigate-cli`。安装包需要 glibc 2.39 或更高版本以及 D-Bus 运行时库，Ubuntu 24.04 和 Debian 13 满足 glibc 基线。
 
 ### 源码安装
 

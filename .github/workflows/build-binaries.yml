@@ -15,6 +15,10 @@ on:
         description: Archive label (nightly or the package version)
         required: true
         type: string
+      linux_packages:
+        description: Build Linux installation packages alongside the archives
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -86,6 +90,37 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $version -ne "aigate-cli $env:AIGATE_BUILD_VERSION") {
             throw 'Packaged binary smoke test failed'
           }
+      - name: Build and check Linux installation packages
+        if: runner.os == 'Linux' && inputs.linux_packages
+        run: |
+          nfpm_version=2.49.0
+          case "$BUILD_TARGET" in
+            x86_64-unknown-linux-gnu)
+              nfpm_arch=x86_64
+              nfpm_sha=2afaa5ffb5e3493402e31e7c67a5a1fb42133e3f66fc315ca0051934125561c7
+              deb_arch=amd64
+              ;;
+            aarch64-unknown-linux-gnu)
+              nfpm_arch=arm64
+              nfpm_sha=d4eee71839e92c68cbd3b101640bad32d2856fc551acae0635be9118e48c9d9c
+              deb_arch=arm64
+              ;;
+            *) exit 1 ;;
+          esac
+          tool_dir=$(mktemp -d)
+          trap 'rm -rf -- "$tool_dir"' EXIT
+          nfpm_asset="nfpm_${nfpm_version}_Linux_$nfpm_arch.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/goreleaser/nfpm/releases/download/v$nfpm_version/$nfpm_asset" \
+            --output "$tool_dir/$nfpm_asset"
+          printf '%s  %s\n' "$nfpm_sha" "$tool_dir/$nfpm_asset" | sha256sum --strict --check
+          tar -xzf "$tool_dir/$nfpm_asset" -C "$tool_dir" nfpm
+          NFPM_BIN="$tool_dir/nfpm" bash scripts/package-linux.sh "$BUILD_TARGET" "$AIGATE_BUILD_VERSION"
+          sudo dpkg --install "dist/aigate-cli-$AIGATE_BUILD_VERSION-$deb_arch.deb"
+          test "$(/usr/bin/aigate-cli --version)" = "aigate-cli $AIGATE_BUILD_VERSION"
+          /usr/bin/aigate-cli regions --json
+          sudo dpkg --remove aigate-cli
+          test ! -e /usr/bin/aigate-cli
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.archive_label }}-${{ matrix.target }}
