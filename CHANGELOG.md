@@ -4,9 +4,17 @@
 
 ## [Unreleased]
 
+## [0.1.1-rc.1] - 2026-11-25
+
 ### 安全
 
 - 将 `rustls-webpki` 升级到 `0.103.16`、`webpki-roots` 升级到 `1.0.10`，修复 TLS 证书验证与根证书信任相关的 RUSTSEC-2026-0382、RUSTSEC-2026-0381 公告。
+- 将 `url` 升级到 `2.5.9`，修复 URL origin 解析中的栈溢出。 [RUSTSEC-2026-0592](https://rustsec.org/advisories/RUSTSEC-2026-0592.html)
+- 将 `rustix` 升级到 `1.1.6`，修复扩展属性 API 的未初始化内存问题。 [RUSTSEC-2026-0486](https://rustsec.org/advisories/RUSTSEC-2026-0486.html)
+
+### 依赖
+
+- 将 Tokio 升级到 `1.54.1`，同步更新 Clap、Bash 等 shell 的补全依赖、Nushell 补全依赖和密码输入依赖。 [#11](https://github.com/davisye/aigate-cli/pull/11) · [#16](https://github.com/davisye/aigate-cli/pull/16)
 
 ## [0.1.1-beta.1] - 2026-10-15
 
