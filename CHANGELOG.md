@@ -1,8 +1,25 @@
 # 更新记录
 
-尚未发布首个正式版本；beta、RC 与 nightly 均为预发行版。
-
 ## [Unreleased]
+
+## [0.1.1] - 2026-11-25
+
+首个正式版本。
+
+### 功能
+
+- 查询 GPU 规格、镜像和实例状态，支持创建、开关机和释放实例。
+- 支持 Workflow 与 Comfy 的文件上传、任务提交、状态和结果查询。
+- 支持系统 Keyring、默认脱敏的 JSON 输出，以及 Bash、Zsh、Fish、PowerShell、Clink/Cmder 和 Nushell 离线补全。
+
+### 安全
+
+- 包含 RC 阶段的 TLS 证书验证和 URL 解析修复。 [v0.1.1-rc.1](https://github.com/davisye/aigate-cli/releases/tag/v0.1.1-rc.1)
+
+### 发行范围
+
+- 提供 Linux x86_64 / ARM64、Windows x64、macOS Apple Silicon 的二进制压缩包和源码包。
+- 提供 x86_64 / ARM64 的 DEB、RPM，以及 Arch Linux x86_64、Arch Linux ARM aarch64 的 `.pkg.tar.zst`。GPG 签名的 SHA256 清单覆盖全部发行包。
 
 ## [0.1.1-rc.1] - 2026-11-25
 

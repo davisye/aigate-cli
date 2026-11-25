@@ -72,6 +72,7 @@ if grep -Eq '/(dist|target|\.git)/' "$scratch/archive-files"; then
     exit 1
 fi
 grep -q 'Initial source release' dist/RELEASE_NOTES.md
+grep -Fq '正式版提供 Linux x86_64 / aarch64' dist/RELEASE_NOTES.md
 reject v0.1.0
 cp dist/aigate-cli-0.1.0-source.tar.gz "$scratch/first.tar.gz"
 rm -rf dist

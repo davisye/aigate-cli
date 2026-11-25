@@ -170,7 +170,7 @@ CI 配置要求 Windows 执行 PowerShell 检查、macOS 执行 Nushell 与 Lua 
 
 ## 发布前核对
 
-alpha / beta / rc 与 nightly 分发四目标 CI 二进制及源码包，正式稳定版保留源码草稿流程。二进制按目标平台完成原生编译、测试、打包和离线运行检查，并附带许可与校验和；桌面凭证库和真实 API 仍需独立验收，要求见 [第三方说明](../THIRD_PARTY_NOTICES.md)。`publish = false` 仅控制 crates.io 发布；Cargo 仓库元数据应填写真实地址。
+正式版、预发行版和 nightly 分发四目标二进制及源码包。带版本标签的发行还分发 Linux 安装包。二进制按目标平台完成原生编译、测试、打包和离线运行检查，并附带许可与校验和。桌面凭证库和真实 API 仍需独立验收。 [第三方说明](../THIRD_PARTY_NOTICES.md)
 
 ### 自动检查
 
@@ -194,33 +194,22 @@ alpha / beta / rc 与 nightly 分发四目标 CI 二进制及源码包，正式�
 
 仓库可见性或账户方案变化后，重新核对这些设置。安全报告入口见 [安全政策](../SECURITY.md)，第三方 Actions 的允许列表及合并规则应与当前工作流一致。
 
-### 准备正式源码发行
+### 发布带版本标签的版本
 
-1. 核对平台状态、许可、README 与安全政策，填入真实仓库地址。检查 `cargo package --list --allow-dirty --locked`，确保包含必要文件，排除本地配置和构建产物。
-2. 运行 `AIGATE_REQUIRE_SHELLS=1 make check`、`make build` 和 `cargo audit --file Cargo.lock`。源码安装的版本输出须与待发行的 Cargo 包版本一致。
-3. 在决定准备正式发行时，先将 Cargo 包及锁文件版本更新为 `0.1.0`，将 `CHANGELOG.md` 的 `Unreleased` 内容归档到 `## [0.1.0] - YYYY-MM-DD`，保留新的 `Unreleased` 节。同步文档中未发布的状态表述；日期使用实际准备日期。提交全部发行内容并合入 `main`，再为该提交创建和推送 `v0.1.0` 标签。
-4. 推送 `v0.1.0` 标签自动触发 **Release**；也可从 `main` 手动输入已有标签。流程验证标签与 Cargo 版本、主分支归属及已归档的发行说明，对标签对应提交重新执行 CI，然后生成源码包、`SHA256SUMS`、GPG 签名 `SHA256SUMS.asc` 和公开密钥，最后创建 GitHub Release 草稿。签名环境配置见 [GPG 发行签名](release-signing.md)；已有同名 Release 会失败，不覆盖附件。
-5. 核对草稿说明、对应提交和全部附件，下载并验证 GPG 签名及文件哈希后，再由维护者明确发布。工作流不会自动公开正式稳定版。
+1. 核对平台状态、许可、README 与安全政策。检查 `cargo package --list --allow-dirty --locked`，确保包含必要文件，排除本地配置和构建产物。
+2. 更新 Cargo 包及锁文件版本并归档同名 CHANGELOG 说明，保留新的 `Unreleased` 节。同步 README 的发行说明，通过四平台 CI 和依赖审计后合入 `main`。
+3. 为该提交创建并推送与 Cargo 版本一致的签名标签，如 `v0.1.1` 或 `v0.1.2-rc.1`。推送标签自动触发 **Release**，也可从 `main` 手动输入已有标签。工作流验证标签、版本、主分支归属和发行说明，再运行 CI。
+4. 四个原生 runner 构建并检查二进制。Linux runner 使用固定版本及 SHA256 的 nFPM，从同次构建生成 x86_64 / ARM64 的 DEB、RPM 和 `.pkg.tar.zst` 安装包，并安装、运行、卸载对应架构的 DEB。
+5. 工作流为四个二进制压缩包、源码包及六个 Linux 安装包生成带 GPG 签名的 SHA256 校验清单。草稿上传完成后，工作流重新下载并校验全部附件。预发行版通过后自动公开，正式版由维护者核对草稿并发布为 Latest。签名环境和验签步骤见 [GPG 发行签名](release-signing.md)。
 
-本地可在干净且与标签一致的检出目录运行：
+本地可在干净且与标签一致的检出目录准备源码包和发行说明。
 
 ```sh
-bash scripts/prepare-release.sh --check v0.1.0
-bash scripts/prepare-release.sh v0.1.0
+bash scripts/prepare-release.sh --check v0.1.1
+bash scripts/prepare-release.sh v0.1.1
 ```
 
-输出写入被忽略的 `dist/`，包含 `aigate-cli-0.1.0-source.tar.gz`、`SHA256SUMS`、`RELEASE_NOTES.md`。脚本不创建提交或标签，不覆盖已有产物。源码包来自 `git archive`，相同提交重复生成的压缩包一致；这不代表跨平台编译出的二进制逐字节一致。
-
-### alpha、beta、rc 标签发行及 GPG 签名
-
-版本化发行的密钥准备、GitHub Environment 设置和下载验签见 [GPG 发行签名](release-signing.md)。alpha / beta / rc 共用以下预发行流程；正式稳定版保持前述源码草稿流程，也附带 GPG 校验和签名。
-
-1. 将 Cargo 包与锁文件版本更新为 `X.Y.Z-alpha.N`、`X.Y.Z-beta.N` 或 `X.Y.Z-rc.N`，在 CHANGELOG 中归档同名版本说明。先通过四目标原生 CI 和依赖审计，再合入 `main`。
-2. 为通过检查的 main 提交创建并推送带版本号的签名标签，例如 `v0.2.0-alpha.1`。标签和 Cargo 版本必须完全一致；版本号不允许前导零，只接受 `alpha.N`、`beta.N` 或 `rc.N`，不接受任意后缀。
-3. 标签推送自动触发 **Release**；也可从 main 手动输入已有标签。流程检查主分支归属、版本和发行说明，重新执行 CI，再调用 `build-binaries.yml` 在四个原生 runner 构建并检查解压后的二进制。
-4. 发布 job 合并四个二进制包和源码包，生成五项 SHA256 校验和，并用 CI 专用签名子钥生成 `SHA256SUMS.asc`，附带 `aigate-cli-release-key.asc`。先创建草稿并重新下载校验，完整通过后公开为 prerelease，显式设置 `latest=false`。已存在的同名 Release 不覆盖；后续修复使用新版本编号。缺少签名 Secrets 或验签失败会中止发布。
-
-预发行附件名形如 `aigate-cli-0.2.0-alpha.1-aarch64-unknown-linux-gnu.tar.gz`。包内 `BUILD-INFO.txt` 包含版本、完整提交和目标；CLI 输出对应版本。alpha / beta / rc 与 nightly 的原生打包配置共享，后者使用固定 `nightly` 附件名。
+输出写入被忽略的 `dist/`，包含源码包、`SHA256SUMS` 和 `RELEASE_NOTES.md`。源码包来自 `git archive`，相同提交重复生成的压缩包一致。二进制包内的 `BUILD-INFO.txt` 记录版本、完整提交和目标。现有版本的修复通过新标签发行。
 
 ### Nightly 自动发行
 
